@@ -1,0 +1,11 @@
+### Erlang Stuff ###
+.eunit
+deps
+*.o
+*.beam
+*.plt
+erl_crash.dump
+.concrete/DEV_MODE
+.rebar
+.log
+### END - Erlang Stuff ###
