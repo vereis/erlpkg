@@ -1,7 +1,7 @@
 # erlpkg
 Erlpkg is a small, simple and minimal Erlang utility to create standalone escripts for your Erlang projects.
 This was originally written for [Jarlang](https://github.com/vereis/jarlang), which required other filetypes to be added into a resultant escript package, and thus ```erlpkg``` has the neat ability to encode arbitary filetypes and include them in generated escripts.
-The main goal of ```erlpkg``` is ultimate to require no dependencies, and to allow you to build escripts containing anything you want as easily as running the erlpkg ```escript``` followed by a list of file arguments.
+The main goal of ```erlpkg``` is ultimately to require no dependencies, and to allow you to build escripts containing anything you want as easily as running the erlpkg ```escript``` followed by a list of file arguments.
 
 ## Getting Started
 Note that this project is still in development and very likely contains overlooked bugs and issues. Please be weary of this when considering this for real world usage.
