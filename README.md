@@ -16,8 +16,21 @@ Note that this project is still in development and very likely contains overlook
 ```erlang
 cd(src).
 c(erlpkg).
-erlpkg:build(["erlpkg", "erlpkg.erl"]).
+c(pkgargs).
+erlpkg:build("erlpkg.erl", ["erlpkg.erl", "pkgargs.erl"], "erlpkg").
 ```
+
+Once erlpkg is built, you can run it by simply providing it a list of files as arguments. Erlpkg will then automatically bundle them up into a valid escript for your use. An example of this might look like:
+```shell
+./erlpkg erlpkg.erl pkargs.erl
+```
+Which will produce an escript called ```erlpkg.erlpkg```. This is actually how erlpkg is built!
+Additional arguments can be added to change certain parameters, currently, the only arguments added are ```-entrypoint``` which determines which module is the main module of the generated escript, and ```-output``` to allow us to specify the name of the generated escript.
+This updated example might look like:
+```shell
+./erlpkg pkgagrs.erl erlpkg.erl -entrypoint erlpkg -output erlpkg
+```
+This will create an escript named ```erlpkg``` instead of ```erlpkg.erlpkg``` and won't fail to run because even though ```pkgargs.erl``` is the first file added to the escript, we explicitly tell ```erlpkg``` to set the main entrypoint to the ```erlpkg``` module instead. 
 
 Note: Any type of file can be included in an escript as escripts are essentially just fancy zip files, right now theres no way to easily and cleanly utilise other files added into an escript but one can easily play around with them by manually unzipping the contents of the escript. Additional erlpkg modules are going to be written and included in generated escripts by default for this purpose.
 
