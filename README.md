@@ -25,6 +25,7 @@ Once erlpkg is built, you can run it by simply providing it a list of files as a
 ./erlpkg erlpkg.erl pkargs.erl
 ```
 Which will produce an escript called ```erlpkg.erlpkg```. This is actually how erlpkg is built!
+
 Additional arguments can be added to change certain parameters, currently, the only arguments added are ```-entrypoint``` which determines which module is the main module of the generated escript, and ```-output``` to allow us to specify the name of the generated escript.
 This updated example might look like:
 ```shell
