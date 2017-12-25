@@ -2,43 +2,31 @@
 %%% Builds an escript package out of a list of given Erlang packages
 -module(erlpkg).
 -author([{"Vereis", "Chris Bailey"}]).
--vsn("2.0.0").
+-vsn("3.0.0").
 
 -export([
     main/1,
     build/3
 ]).
 
--define(DEFAULT_ARGS, #{
-    "-output" => default,
-    "-entrypoint" => default
-}).
+-define(DEFAULT_ARGS, [
+    {["-e", "--entrypoint"], o_entry,  singleton, default, "Sets the entry point for the erlpkg which is the module we start the erlpkg from. The default value for this is the first module argument provided."},
+    {["-o", "--output"],     o_output, singleton, default, "Sets the output name for the erlpkg. The default value for this is the first module argument provided with the extension '.erlpkg'"}
+]).
 
 %% Entrypoint into erlpkg
 %% Processes arguments with pkrargs, and sets the variables 'Files_to_include', 'Output_dir',
 %% 'Escript_mode' and 'Entrypoint' to whatever is set in the Args, or whatever the default is.
 main(Args) ->
-    Processed_args = pkgargs:parse(Args, ?DEFAULT_ARGS),
-    Files_to_include = maps:get("normal_args", Processed_args),
+    % Parse input args and read the options we need to proceed
+    Parsed_args      = pkgargs:parse(Args,   ?DEFAULT_ARGS),
+    Files_to_include = pkgargs:get(default,  Parsed_args),
+    Entrypoint       = pkgargs:get(o_entry,  Parsed_args),
+    Pkg_name         = pkgargs:get(o_output, Parsed_args),
 
     % Display usage instructions or error message, or build package.
     case length(Files_to_include) >= 1 of
         true ->
-            % Set the variables we'll need to build
-            case maps:get("-entrypoint", Processed_args) of
-                default ->
-                    [Entrypoint | _] = Files_to_include;
-                Custom_Entrypoint ->
-                    Entrypoint = Custom_Entrypoint
-            end,
-            case maps:get("-output", Processed_args) of
-                default ->
-                    Pkg_name = [filename:rootname(Entrypoint), ".erlpkg"];
-                Custom_Pkg_name ->
-                    Pkg_name = Custom_Pkg_name
-            end,
-
-            % and proceed to build escript
             build(Entrypoint, Files_to_include, Pkg_name);
         _ ->
             usage_instructions()
@@ -51,15 +39,18 @@ main(Args) ->
 %%        the main entrypoint said escript. I.e. running erlpkg on itself with
 %%        'erlpkg erlpkg erlpkg.erl' will produce a working erlpkg escript whereas
 %%        trying to create an escript with 'erlpkg erlpkg_escript erlpkg.erl' will not.
+build(default, Files_to_include, default) ->
+    [Entrypoint | _] = Files_to_include,
+    Pkg_name = [filename:rootname(Entrypoint), ".erlpkg"],
+    build(Entrypoint, Files_to_include, Pkg_name); 
 build(Entrypoint, Files_to_include, Pkg_name) ->
     io:format("Preparing to build package: ~s...~n", [Pkg_name]),
-    
     Pkg_header = build_header(Entrypoint),
     Pkg_contents = [build_file(File_to_include) || File_to_include <- Files_to_include],
     
     {ok, {_, Zipped_contents}} = zip:create(Pkg_name, Pkg_contents, [memory, {compress, all}]),
     Pkg = iolist_to_binary([Pkg_header, Zipped_contents]),
-    file:write_file(Pkg_name, Pkg),
+    ok = file:write_file(Pkg_name, Pkg),
 
     io:format("Successfully built package: ~s~n~n", [Pkg_name]).
 
@@ -120,8 +111,10 @@ build_file(_, Filename) ->
 %% Displays help information
 usage_instructions() ->
     io:format(
-        "Usage:  ~s FILES... [-entrypoint <module>] [-output <filename>]~n" ++
-        "Entrypoint is the first file argument without the file's file extension unless otherwise specified~n" ++
-        "Output file is the same as the entrypoint with the file extension '.erlpkg' unless otherwise specified~n~n",
-        [filename:basename(escript:script_name())]
+        "Usage: ~s FILES... [-e <module>] [-o <filename>]~n~n" ++
+        "~s~n",
+        [
+            filename:basename(escript:script_name()),
+            pkgargs:create_help_string(?DEFAULT_ARGS, 3, 21)
+        ]
     ).
