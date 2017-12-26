@@ -11,8 +11,12 @@
 ]).
 
 -define(DEFAULT_ARGS, [
-    {["-e", "--entrypoint"], o_entry,  singleton, default, "Sets the entry point for the erlpkg which is the module we start the erlpkg from. The default value for this is the first module argument provided."},
-    {["-o", "--output"],     o_output, singleton, default, "Sets the output name for the erlpkg. The default value for this is the first module argument provided with the extension '.erlpkg'"},
+    {["-e", "--entrypoint"], o_entry,  singleton, default, "Sets the entry point for the erlpkg which is the " ++
+                                                           "module we start the erlpkg from. The default value for" ++
+                                                           "this is the first module argument provided."},
+    {["-o", "--output"],     o_output, singleton, default, "Sets the output name for the erlpkg. The default " ++
+                                                           "value for this is the first module argument provided " ++
+                                                           "with the extension '.erlpkg'"},
     {["-h", "--help"],       o_help,   is_set,    false,   "Displays this help message and exits."}
 ]).
 
@@ -22,34 +26,34 @@
 
 
 %% Entrypoint into erlpkg
-%% Processes arguments with pkrargs, and sets the variables 'Files_to_include', 'Output_dir',
+%% Processes arguments with pkrargs, and sets the variables 'Files', 'Output_dir',
 %% 'Escript_mode' and 'Entrypoint' to whatever is set in the Args, or whatever the default is.
 main() ->
     main(init:get_plain_arguments()).
 
 main(Args) ->
-    Parsed_args      = pkgargs:parse(Args,   ?DEFAULT_ARGS),
-    Show_help        = pkgargs:get(o_help,   Parsed_args),
+    ParsedArgs      = pkgargs:parse(Args,   ?DEFAULT_ARGS),
+    ShowHelp        = pkgargs:get(o_help,   ParsedArgs),
 
-    case Show_help of
+    case ShowHelp of
         true ->
             help();
         false ->
-            Files_to_include = pkgargs:get(default,  Parsed_args),
-            case length(Files_to_include) >= 1 of
-                true -> 
-                    % Set entrypoint to either a specified entrypoint or the default value for it 
-                    Entrypoint = ?COND(pkgargs:get(o_entry, Parsed_args) =:= default, 
-                                          filename:rootname(filename:basename(lists:nth(1, Files_to_include))), 
-                                          pkgargs:get(o_entry, Parsed_args)),
-                    
+            Files = pkgargs:get(default,  ParsedArgs),
+            case length(Files) >= 1 of
+                true ->
+                    % Set entrypoint to either a specified entrypoint or the default value for it
+                    Entrypoint = ?COND(pkgargs:get(o_entry, ParsedArgs) =:= default,
+                                          filename:rootname(filename:basename(lists:nth(1, Files))),
+                                          pkgargs:get(o_entry, ParsedArgs)),
+
                     % Set pkg_name to either a specified pkg_name or the default value for it
-                    Pkg_name   = ?COND(pkgargs:get(o_output, Parsed_args) =:= default, 
-                                          [filename:rootname(Entrypoint), ".erlpkg"], 
-                                          pkgargs:get(o_output, Parsed_args)),
+                    PkgName   = ?COND(pkgargs:get(o_output, ParsedArgs) =:= default,
+                                          [filename:rootname(Entrypoint), ".erlpkg"],
+                                          pkgargs:get(o_output, ParsedArgs)),
 
                     % Begin to build
-                    build(Entrypoint, Files_to_include, Pkg_name);
+                    build(Entrypoint, Files, PkgName);
                 _ ->
                     help()
             end
@@ -59,32 +63,31 @@ main(Args) ->
     init:stop().
 
 
-%% Takes a list of parameters, starting with a Package Name and then a list of files 
+%% Takes a list of parameters, starting with a Package Name and then a list of files
 %% to include in said package, and builds an escript package.
 %%
-%% Note : The given Pkg_name determines which module in an escript is assumed to be
+%% Note : The given PkgName determines which module in an escript is assumed to be
 %%        the main entrypoint said escript. I.e. running erlpkg on itself with
 %%        'erlpkg erlpkg erlpkg.erl' will produce a working erlpkg escript whereas
 %%        trying to create an escript with 'erlpkg erlpkg_escript erlpkg.erl' will not.
-build(Entrypoint, Files_to_include, Pkg_name) ->
-    io:format("~p~n~p~n~p~n~n~n", [Entrypoint, Files_to_include, Pkg_name]),
-    io:format("Preparing to build package: ~s...~n", [Pkg_name]),
-    Pkg_header = build_header(Entrypoint),
-    Pkg_contents = [build_file(File_to_include) || File_to_include <- Files_to_include],
-    
-    {ok, {_, Zipped_contents}} = zip:create(Pkg_name, Pkg_contents, [memory, {compress, all}]),
-    Pkg = iolist_to_binary([Pkg_header, Zipped_contents]),
-    ok = file:write_file(Pkg_name, Pkg),
+build(Entrypoint, Files, PkgName) ->
+    io:format("Preparing to build package: ~s...~n", [PkgName]),
+    PkgHeader = build_header(Entrypoint),
+    PkgContents = [build_file(File) || File <- Files],
 
-    io:format("Successfully built package: ~s~n~n", [Pkg_name]).
+    {ok, {_, Zip}} = zip:create(PkgName, PkgContents, [memory, {compress, all}]),
+    Pkg = iolist_to_binary([PkgHeader, Zip]),
+    ok = file:write_file(PkgName, Pkg),
+
+    io:format("Successfully built package: ~s~n~n", [PkgName]).
 
 
 %% Shorthand for building escript headers
 build_header(Entrypoint) ->
     [
-        <<"#!/usr/bin/env escript\n%%! -A0 +sbtu">>, 
+        <<"#!/usr/bin/env escript\n%%! -A0 +sbtu">>,
         <<" ">>,
-        [<<"-escript main ">>, filename:rootname(Entrypoint)], 
+        [<<"-escript main ">>, filename:rootname(Entrypoint)],
         <<"\n">>
     ].
 
@@ -96,8 +99,8 @@ build_file(Filename) when is_atom(Filename) ->
 build_file(Filename) when is_binary(Filename) ->
     build_file(binary_to_list(Filename));
 build_file(Filename) when is_list(Filename) ->
-    {ok, File_info} = file:read_file_info(Filename),
-    case tuple_to_list(File_info) of
+    {ok, FileInfo} = file:read_file_info(Filename),
+    case tuple_to_list(FileInfo) of
         [file_info, _, directory | _] ->
             build_file(dir, Filename);
         [file_info, _, regular | _] ->
@@ -111,31 +114,31 @@ build_file(Filename) when is_list(Filename) ->
 build_file(erl, Filename) ->
     io:format("==> Including Erlang source file: ~s~n", [Filename]),
     io:format("~4cCompiling Erlang source file in memory....~n", [$ ]),
-    {ok, ModuleName, Compiled_file} = compile:file(Filename, [binary]),
+    {ok, ModuleName, CompiledFile} = compile:file(Filename, [binary]),
     io:format("~4cok.~n", [$ ]),
-    {atom_to_list(ModuleName) ++ ".beam", Compiled_file};
+    {atom_to_list(ModuleName) ++ ".beam", CompiledFile};
 
 %% Zips up a directory and returns its binary data so we can add it to an escript package
 build_file(dir, Filename) ->
     io:format("==> Including directory: ~s~n", [Filename]),
     io:format("~4cCompressing and zipping directory in memory....~n", [$ ]),
-    {ok, {_, Zipped_contents}} = zip:create(filename:basename(Filename) ++ ".zip", [Filename], [memory, {compress, all}]),
+    {ok, {_, Zip}} = zip:create(filename:basename(Filename) ++ ".zip", [Filename], [memory, {compress, all}]),
     io:format("~4cok.~n", [$ ]),
-    {filename:basename(Filename) ++ ".zip", Zipped_contents};
+    {filename:basename(Filename) ++ ".zip", Zip};
 
 %% Reads a given beam file and attaches its binary data so we can add it to an escript package
 build_file(beam, Filename) ->
     io:format("==> Including Erlang bytecode file: ~s~n", [Filename]),
-    {ok, File_data} = file:read_file(Filename),
+    {ok, Data} = file:read_file(Filename),
     io:format("~4cok.~n", [$ ]),
-    {filename:basename(Filename), File_data};
+    {filename:basename(Filename), Data};
 
 %% Blindly reads a given file for its binary data so we can add it to an escript package
 build_file(_, Filename) ->
     io:format("==> Including unknown type file: ~s~n", [Filename]),
-    {ok, File_data} = file:read_file(Filename),
+    {ok, Data} = file:read_file(Filename),
     io:format("~4cok.~n", [$ ]),
-    {filename:basename(Filename), File_data}.
+    {filename:basename(Filename), Data}.
 
 
 %% Displays help information
@@ -143,7 +146,7 @@ help() ->
     io:format(
         "Usage: ~s FILE... [-e <module>] [-o <filename>]~n" ++
         "Generate an Erlang Escript with the FILEs you specify.~n" ++
-        "Example: ~s calc.erl sci_calc.erl stats_calc.erl -e calc -o calculator.erlpkg~n~n" ++  
+        "Example: ~s calc.erl sci_calc.erl stats_calc.erl -e calc -o calculator.erlpkg~n~n" ++
         "Configuration Parameters:~n" ++
         "~s~n",
         [
