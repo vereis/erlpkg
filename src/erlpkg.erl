@@ -11,25 +11,32 @@
 
 -define(DEFAULT_ARGS, [
     {["-e", "--entrypoint"], o_entry,  singleton, default, "Sets the entry point for the erlpkg which is the module we start the erlpkg from. The default value for this is the first module argument provided."},
-    {["-o", "--output"],     o_output, singleton, default, "Sets the output name for the erlpkg. The default value for this is the first module argument provided with the extension '.erlpkg'"}
+    {["-o", "--output"],     o_output, singleton, default, "Sets the output name for the erlpkg. The default value for this is the first module argument provided with the extension '.erlpkg'"},
+    {["-h", "--help"],       o_help,   is_set,    false,   "Displays this help message and exits."}
 ]).
 
 %% Entrypoint into erlpkg
 %% Processes arguments with pkrargs, and sets the variables 'Files_to_include', 'Output_dir',
 %% 'Escript_mode' and 'Entrypoint' to whatever is set in the Args, or whatever the default is.
 main(Args) ->
-    % Parse input args and read the options we need to proceed
     Parsed_args      = pkgargs:parse(Args,   ?DEFAULT_ARGS),
-    Files_to_include = pkgargs:get(default,  Parsed_args),
-    Entrypoint       = pkgargs:get(o_entry,  Parsed_args),
-    Pkg_name         = pkgargs:get(o_output, Parsed_args),
+    Show_help        = pkgargs:get(o_help,   Parsed_args),
 
-    % Display usage instructions or error message, or build package.
-    case length(Files_to_include) >= 1 of
+    case Show_help of
         true ->
-            build(Entrypoint, Files_to_include, Pkg_name);
-        _ ->
-            usage_instructions()
+            help();
+        false ->
+            Files_to_include = pkgargs:get(default,  Parsed_args),
+            Entrypoint       = pkgargs:get(o_entry,  Parsed_args),
+            Pkg_name         = pkgargs:get(o_output, Parsed_args),
+
+            % Display usage instructions or error message, or build package.
+            case length(Files_to_include) >= 1 of
+                true ->
+                    build(Entrypoint, Files_to_include, Pkg_name);
+                _ ->
+                    help()
+            end
     end.
 
 %% Takes a list of parameters, starting with a Package Name and then a list of files 
@@ -109,12 +116,16 @@ build_file(_, Filename) ->
     {Filename, File_data}.
 
 %% Displays help information
-usage_instructions() ->
+help() ->
     io:format(
-        "Usage: ~s FILES... [-e <module>] [-o <filename>]~n~n" ++
+        "Usage: ~s FILE... [-e <module>] [-o <filename>]~n" ++
+        "Generate an Erlang Escript with the FILEs you specify.~n" ++
+        "Example: ~s calc.erl sci_calc.erl stats_calc.erl -e calc -o calculator.erlpkg~n~n" ++  
+        "Configuration Parameters:~n" ++
         "~s~n",
         [
             filename:basename(escript:script_name()),
-            pkgargs:create_help_string(?DEFAULT_ARGS, 3, 21)
+            filename:basename(escript:script_name()),
+            pkgargs:create_help_string(?DEFAULT_ARGS, 1, 21)
         ]
     ).

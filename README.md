@@ -32,7 +32,7 @@ Additional arguments can be added to change certain parameters, currently, the o
 
 This updated example might look like:
 ```shell
-./erlpkg pkgagrs.erl erlpkg.erl -entrypoint erlpkg -output erlpkg
+./erlpkg pkgagrs.erl erlpkg.erl -e erlpkg -o erlpkg
 ```
 This will create an escript named ```erlpkg``` instead of ```erlpkg.erlpkg``` and won't fail to run because even though ```pkgargs.erl``` is the first file added to the escript, we explicitly tell ```erlpkg``` to set the main entrypoint to the ```erlpkg``` module instead. 
 
