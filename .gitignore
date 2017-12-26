@@ -8,4 +8,7 @@ erl_crash.dump
 .concrete/DEV_MODE
 .rebar
 .log
+ebin/*
+edebug/*
+etesting/*
 ### END - Erlang Stuff ###

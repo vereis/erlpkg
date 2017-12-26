@@ -5,6 +5,7 @@
 -vsn("3.0.0").
 
 -export([
+    main/0,
     main/1,
     build/3
 ]).
@@ -15,9 +16,17 @@
     {["-h", "--help"],       o_help,   is_set,    false,   "Displays this help message and exits."}
 ]).
 
+-define(COND(Cond, A, B), [
+    case Cond of true -> A; false -> B end
+]).
+
+
 %% Entrypoint into erlpkg
 %% Processes arguments with pkrargs, and sets the variables 'Files_to_include', 'Output_dir',
 %% 'Escript_mode' and 'Entrypoint' to whatever is set in the Args, or whatever the default is.
+main() ->
+    main(init:get_plain_arguments()).
+
 main(Args) ->
     Parsed_args      = pkgargs:parse(Args,   ?DEFAULT_ARGS),
     Show_help        = pkgargs:get(o_help,   Parsed_args),
@@ -27,17 +36,28 @@ main(Args) ->
             help();
         false ->
             Files_to_include = pkgargs:get(default,  Parsed_args),
-            Entrypoint       = pkgargs:get(o_entry,  Parsed_args),
-            Pkg_name         = pkgargs:get(o_output, Parsed_args),
-
-            % Display usage instructions or error message, or build package.
             case length(Files_to_include) >= 1 of
-                true ->
+                true -> 
+                    % Set entrypoint to either a specified entrypoint or the default value for it 
+                    Entrypoint = ?COND(pkgargs:get(o_entry, Parsed_args) =:= default, 
+                                          filename:rootname(filename:basename(lists:nth(1, Files_to_include))), 
+                                          pkgargs:get(o_entry, Parsed_args)),
+                    
+                    % Set pkg_name to either a specified pkg_name or the default value for it
+                    Pkg_name   = ?COND(pkgargs:get(o_output, Parsed_args) =:= default, 
+                                          [filename:rootname(Entrypoint), ".erlpkg"], 
+                                          pkgargs:get(o_output, Parsed_args)),
+
+                    % Begin to build
                     build(Entrypoint, Files_to_include, Pkg_name);
                 _ ->
                     help()
             end
-    end.
+    end,
+
+    % Clean up and stop
+    init:stop().
+
 
 %% Takes a list of parameters, starting with a Package Name and then a list of files 
 %% to include in said package, and builds an escript package.
@@ -46,11 +66,8 @@ main(Args) ->
 %%        the main entrypoint said escript. I.e. running erlpkg on itself with
 %%        'erlpkg erlpkg erlpkg.erl' will produce a working erlpkg escript whereas
 %%        trying to create an escript with 'erlpkg erlpkg_escript erlpkg.erl' will not.
-build(default, Files_to_include, default) ->
-    [Entrypoint | _] = Files_to_include,
-    Pkg_name = [filename:rootname(Entrypoint), ".erlpkg"],
-    build(Entrypoint, Files_to_include, Pkg_name); 
 build(Entrypoint, Files_to_include, Pkg_name) ->
+    io:format("~p~n~p~n~p~n~n~n", [Entrypoint, Files_to_include, Pkg_name]),
     io:format("Preparing to build package: ~s...~n", [Pkg_name]),
     Pkg_header = build_header(Entrypoint),
     Pkg_contents = [build_file(File_to_include) || File_to_include <- Files_to_include],
@@ -61,6 +78,7 @@ build(Entrypoint, Files_to_include, Pkg_name) ->
 
     io:format("Successfully built package: ~s~n~n", [Pkg_name]).
 
+
 %% Shorthand for building escript headers
 build_header(Entrypoint) ->
     [
@@ -70,8 +88,11 @@ build_header(Entrypoint) ->
         <<"\n">>
     ].
 
+
 %% Processes a file and appends its data to an escript package. Determines how to process given file
 %% by reading file info to check whether or not input is a directory, and if it isn't, reading file extension.
+build_file(Filename) when is_atom(Filename) ->
+    build_file(atom_to_list(Filename));
 build_file(Filename) when is_binary(Filename) ->
     build_file(binary_to_list(Filename));
 build_file(Filename) when is_list(Filename) ->
@@ -84,6 +105,7 @@ build_file(Filename) when is_list(Filename) ->
             build_file(list_to_atom(Type), Filename)
     end.
 
+
 %% Compiles a given erlang source file and returns its binary data so we can add it to an escript
 %% package.
 build_file(erl, Filename) ->
@@ -95,25 +117,26 @@ build_file(erl, Filename) ->
 
 %% Zips up a directory and returns its binary data so we can add it to an escript package
 build_file(dir, Filename) ->
-    io:format("==> Including directory: ~s/~n", [Filename]),
+    io:format("==> Including directory: ~s~n", [Filename]),
     io:format("~4cCompressing and zipping directory in memory....~n", [$ ]),
-    {ok, {_, Zipped_contents}} = zip:create(Filename ++ ".zip", [Filename], [memory, {compress, all}]),
+    {ok, {_, Zipped_contents}} = zip:create(filename:basename(Filename) ++ ".zip", [Filename], [memory, {compress, all}]),
     io:format("~4cok.~n", [$ ]),
-    {Filename ++ ".zip", Zipped_contents};
+    {filename:basename(Filename) ++ ".zip", Zipped_contents};
 
 %% Reads a given beam file and attaches its binary data so we can add it to an escript package
 build_file(beam, Filename) ->
     io:format("==> Including Erlang bytecode file: ~s~n", [Filename]),
     {ok, File_data} = file:read_file(Filename),
     io:format("~4cok.~n", [$ ]),
-    {Filename, File_data};
+    {filename:basename(Filename), File_data};
 
 %% Blindly reads a given file for its binary data so we can add it to an escript package
 build_file(_, Filename) ->
     io:format("==> Including unknown type file: ~s~n", [Filename]),
     {ok, File_data} = file:read_file(Filename),
     io:format("~4cok.~n", [$ ]),
-    {Filename, File_data}.
+    {filename:basename(Filename), File_data}.
+
 
 %% Displays help information
 help() ->
