@@ -75,12 +75,14 @@ test:
 	@ $(DIALYZER) $(TESTDIR)/*.beam || true
 	@ echo "$(PURPLE)==> Running Elvis$(NORMAL)"
 	@ $(ELVIS) || true
+	@ echo "    Done"
 	@ echo "$(PURPLE)==> Finished Testing, results are printed to console$(NORMAL)"
 	@ echo "    Done\n"
 .PHONY: lint
 lint:
 	@ echo "==> Linting Project with Elvis"
 	@ $(ELVIS) || true
+	@ echo "    Done\n"
 .PHONY: clean
 clean:
 	@ echo "$(ORANGE)==> Cleaning builds"
