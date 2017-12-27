@@ -2,7 +2,10 @@
 %%% Builds an escript package out of a list of given Erlang packages
 -module(erlpkg).
 -author([{"Vereis", "Chris Bailey"}]).
--vsn("3.0.0").
+
+-define(VERSION, "3.0.0").
+
+-vsn(?VERSION).
 
 -export([
     main/0,
@@ -17,11 +20,12 @@
     {["-o", "--output"],     o_output, singleton, default, "Sets the output name for the erlpkg. The default " ++
                                                            "value for this is the first module argument provided " ++
                                                            "with the extension '.erlpkg'"},
-    {["-h", "--help"],       o_help,   is_set,    false,   "Displays this help message and exits."}
+    {["-h", "--help"],       o_help,   is_set,    false,   "Displays this help message and exits."},
+    {["-v", "--version"],    o_vsn,    is_set,    false,   "Displays current build version."}
 ]).
 
 -define(COND(Cond, A, B), [
-    case Cond of true -> A; false -> B end
+    try Cond of _ -> case Cond of true -> A; false -> B end catch _ -> B end
 ]).
 
 
@@ -33,42 +37,84 @@
 %%% ---------------------------------------------------------------------------------------------%%%
 
 %% Entrypoint into erlpkg
-%% Processes arguments with pkrargs, and sets the variables 'Files', 'Output_dir',
-%% 'Escript_mode' and 'Entrypoint' to whatever is set in the Args, or whatever the default is.
+
 main() ->
     main(init:get_plain_arguments()).
 
 main(Args) ->
-    ParsedArgs      = pkgargs:parse(Args,   ?DEFAULT_ARGS),
-    ShowHelp        = pkgargs:get(o_help,   ParsedArgs),
+    ParsedArgs = pkgargs:parse(Args, ?DEFAULT_ARGS),
 
-    case ShowHelp of
-        true ->
+    % Set ShowHelp to true or false depending on whether or not it was specified in args
+    ShowHelp = pkgargs:get(o_help, ParsedArgs),
+
+    % Set ShowVsn to true or false depending on whether or not it was specified in args
+    ShowVsn = pkgargs:get(o_vsn, ParsedArgs),
+
+    % Get a list of files from args to include in escript pkg
+    Files = pkgargs:get(default,  ParsedArgs),
+
+    % Set entrypoint to either a specified entrypoint if set in args, or
+    % to the default value for it
+    Entrypoint = ?COND(pkgargs:get(o_entry, ParsedArgs) =:= default,
+                       default_entrypoint(Files),
+                       pkgargs:get(o_entry, ParsedArgs)),
+
+    % Set pkg_name to either a specified pkg_name if set in args, or
+    % to the default value for it
+    PkgName = ?COND(pkgargs:get(o_output, ParsedArgs) =:= default,
+                    default_pkg_name(Files),
+                    pkgargs:get(o_output, ParsedArgs)),
+
+    try branch(Files, Entrypoint, PkgName, ShowHelp, ShowVsn) of
+        _ -> ok
+    catch
+        throw:usage ->
+            usage(),
             help();
-        false ->
-            Files = pkgargs:get(default,  ParsedArgs),
-            case length(Files) >= 1 of
-                true ->
-                    % Set entrypoint to either a specified entrypoint or the default value for it
-                    Entrypoint = ?COND(pkgargs:get(o_entry, ParsedArgs) =:= default,
-                                          filename:rootname(filename:basename(lists:nth(1, Files))),
-                                          pkgargs:get(o_entry, ParsedArgs)),
-
-                    % Set pkg_name to either a specified pkg_name or the default value for it
-                    PkgName   = ?COND(pkgargs:get(o_output, ParsedArgs) =:= default,
-                                          [filename:rootname(Entrypoint), ".erlpkg"],
-                                          pkgargs:get(o_output, ParsedArgs)),
-
-                    % Begin to build
-                    build(Entrypoint, Files, PkgName);
-                _ ->
-                    help()
-            end
+        throw:help ->
+            help();
+        throw:vsn ->
+            version();
+        throw:{bad_filename, File} ->
+            io:format("~s: Error - ~s is not a valid filename or could not be found.~n Aborting build.~n~n",
+                      [filename:basename(escript:script_name()), File]);
+        E ->
+            SelfName = filename:basename(escript:script_name()),
+            io:format("~s: Unknown Error - ~s~n", [SelfName, E]),
+            usage(),
+            io:format("Try '~s --help' for more information.", [SelfName])
     end,
 
     % Clean up and stop
     init:stop().
 
+
+
+
+
+%%% ---------------------------------------------------------------------------------------------%%%
+%%% - ENTRYPOINT CODE ---------------------------------------------------------------------------%%%
+%%% ---------------------------------------------------------------------------------------------%%%
+
+%% Determines which function to run depending on arguments given.
+branch(Files, Entrypoint, PkgName, _ShowHelp = false, _ShowVsn = false) when length(Files) > 0 ->
+    build(Files, Entrypoint, PkgName);
+branch(_, _, _, _ShowHelp = false, _ShowVsn = false) ->
+    throw(usage);
+branch(_, _, _, _ShowHelp = true, _ShowVsn = false) ->
+    throw(help);
+branch(_, _, _, _ShowHelp = false, _ShowVsn = true) ->
+    throw(vsn);
+branch(_, _, _, _, _) ->
+    throw(unknown).
+
+
+
+
+
+%%% ---------------------------------------------------------------------------------------------%%%
+%%% - BUILDING ERLPKG ---------------------------------------------------------------------------%%%
+%%% ---------------------------------------------------------------------------------------------%%%
 
 %% Takes a list of parameters, starting with a Package Name and then a list of files
 %% to include in said package, and builds an escript package.
@@ -77,7 +123,7 @@ main(Args) ->
 %%        the main entrypoint said escript. I.e. running erlpkg on itself with
 %%        'erlpkg erlpkg erlpkg.erl' will produce a working erlpkg escript whereas
 %%        trying to create an escript with 'erlpkg erlpkg_escript erlpkg.erl' will not.
-build(Entrypoint, Files, PkgName) ->
+build(Files, Entrypoint, PkgName) ->
     io:format("Preparing to build package: ~s...~n", [PkgName]),
     PkgHeader = build_header(Entrypoint),
     PkgContents = [build_file(File) || File <- Files],
@@ -88,13 +134,6 @@ build(Entrypoint, Files, PkgName) ->
 
     io:format("Successfully built package: ~s~n~n", [PkgName]).
 
-
-
-
-%%% ---------------------------------------------------------------------------------------------%%%
-%%% - BUILDING ERLPKG ---------------------------------------------------------------------------%%%
-%%% ---------------------------------------------------------------------------------------------%%%
-
 %% Shorthand for building escript headers
 build_header(Entrypoint) ->
     [
@@ -104,7 +143,6 @@ build_header(Entrypoint) ->
         <<"\n">>
     ].
 
-
 %% Processes a file and appends its data to an escript package. Determines how to process given file
 %% by reading file info to check whether or not input is a directory, and if it isn't, reading file extension.
 build_file(Filename) when is_atom(Filename) ->
@@ -112,15 +150,18 @@ build_file(Filename) when is_atom(Filename) ->
 build_file(Filename) when is_binary(Filename) ->
     build_file(binary_to_list(Filename));
 build_file(Filename) when is_list(Filename) ->
-    {ok, FileInfo} = file:read_file_info(Filename),
-    case tuple_to_list(FileInfo) of
-        [file_info, _, directory | _] ->
-            build_file(dir, Filename);
-        [file_info, _, regular | _] ->
-            [$. | Type] = filename:extension(Filename),
-            build_file(list_to_atom(Type), Filename)
+    case file:read_file_info(Filename) of
+        {ok, FileInfo} ->
+            case tuple_to_list(FileInfo) of
+                [file_info, _, directory | _] ->
+                    build_file(dir, Filename);
+                [file_info, _, regular | _] ->
+                    [$. | Type] = filename:extension(Filename),
+                    build_file(list_to_atom(Type), Filename)
+            end;
+        _ ->
+            throw({bad_filename, Filename})
     end.
-
 
 %% Compiles a given erlang source file and returns its binary data so we can add it to an escript
 %% package.
@@ -160,17 +201,35 @@ build_file(_, Filename) ->
 %%% - MISC FUNCTIONS ----------------------------------------------------------------------------%%%
 %%% ---------------------------------------------------------------------------------------------%%%
 
+%% Displays usage information
+usage() ->
+    SelfName = filename:basename(escript:script_name()),
+    io:format("Usage: ~s FILE... [-e <module>] [-o <filename>]~n" ++
+              "Generates an Erlang Escript with the FILEs you specify.~n" ++
+              "Example: ~s calc.erl sci_calc.erl stats_calc.erl -e calc -o calculator.erlpkg~n~n",
+              [SelfName,
+               SelfName]).
+
 %% Displays help information
 help() ->
-    io:format(
-        "Usage: ~s FILE... [-e <module>] [-o <filename>]~n" ++
-        "Generate an Erlang Escript with the FILEs you specify.~n" ++
-        "Example: ~s calc.erl sci_calc.erl stats_calc.erl -e calc -o calculator.erlpkg~n~n" ++
-        "Configuration Parameters:~n" ++
-        "~s~n",
-        [
-            filename:basename(escript:script_name()),
-            filename:basename(escript:script_name()),
-            pkgargs:create_help_string(?DEFAULT_ARGS, 1, 21)
-        ]
-    ).
+    io:format("Configuration Parameters:~n" ++
+              "~s~n",
+              [pkgargs:create_help_string(?DEFAULT_ARGS, 1, 21)]).
+
+%% Displays version information
+version() ->
+    io:format("Current ~s version: v~s~n~n",
+              [filename:basename(escript:script_name()),
+              ?VERSION]).
+
+%% Generates a default package name
+default_pkg_name([FirstFile | _]) ->
+    [filename:basename(filename:rootname(FirstFile)), ".erlpkg"];
+default_pkg_name([]) ->
+    "default_pkg_name.erlpkg".
+
+%% Generates a default entrypoint
+default_entrypoint([FirstFile | _]) ->
+    filename:basename(filename:rootname(FirstFile));
+default_entrypoint([]) ->
+    default.
