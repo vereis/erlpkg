@@ -2,7 +2,9 @@
 %%% Parses escript package arguments
 -module(pkgargs).
 -author([{"Vereis", "Chris Bailey"}]).
--vsn(2.0).
+-define(VERSION, "2.0.1").
+
+-vsn(?VERSION).
 
 -export([
     get/2,
