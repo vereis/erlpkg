@@ -6,11 +6,17 @@
 
 -vsn(?VERSION).
 
--export([
-    get/2,
-    parse/2,
-    create_help_string/3
-]).
+%% Export all functions if test build
+-ifdef(TEST).
+    -compile(export_all).
+-else.
+    -export([
+        get/2,
+        parse/2,
+        create_help_string/3
+    ]).
+-endif.
+
 
 %% Any arguments not matching a specified option_definition are returned as
 %% a list keyed by the value of this macro.
@@ -282,7 +288,9 @@ create_help_string(OpDefs, LPad, MaxDescLen) ->
     end, NameStrs).
 
 %% Naively build a paragraph of lines Line_length long, seperated by new lines
-parabreak(String, MaxLen) ->
+parabreak(String, MaxLen) when is_binary(String) ->
+    parabreak(binary_to_list(String), MaxLen);
+parabreak(String, MaxLen) when is_list(String) ->
     [W | Ws] = string:tokens(String, " "),
     [lists:flatten([Line, "\n"]) || Line <- parabreak(Ws, MaxLen, [W], [])].
 
@@ -291,4 +299,19 @@ parabreak([], _, CurLine, Lines) ->
 parabreak([W | Ws], MaxLen, L, Ls) when length(L) + length(W) >= MaxLen ->
     parabreak(Ws, MaxLen, [W], Ls ++ [L]);
 parabreak([W | Ws], MaxLen, L, Ls) ->
-    parabreak(Ws, MaxLen, L ++ [" ", W], Ls).
+    parabreak(Ws, MaxLen, lists:flatten(L ++ [" ", W]), Ls).
+
+
+
+
+%%% ---------------------------------------------------------------------------------------------%%%
+%%% - META FUNCTIONS ----------------------------------------------------------------------------%%%
+%%% ---------------------------------------------------------------------------------------------%%%
+
+-ifdef(TEST).
+%% Start eunit testing for this module
+eunit() ->
+    eunit:test({inparallel, ?MODULE}),
+    init:stop().
+-endif.
+

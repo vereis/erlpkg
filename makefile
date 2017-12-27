@@ -5,6 +5,7 @@ ERL = $(shell which erl)
 ERLC = $(shell which erlc)
 ERLFLAGS = -Werror -v -o
 DEBUGFLAGS = -Ddebug +debug_info -W0 -o
+TESTFLAGS = -Ddebug -DTEST +debug_info -W0 -o
 
 # Directory Variables
 SRCDIR = src
@@ -67,21 +68,46 @@ test:
 	@ echo "    Compiling files with warnings ignored"
 	@ echo "    Compiling files will fail if any errors occur"
 	@ mkdir -p $(TESTDIR)
-	@ rm -f $(TESTDIR)/*
+	@ rm -rf $(TESTDIR)/*
 	@ echo "$(PURPLE)==> Compiling Source Files$(RED)"
-	@ $(ERLC) $(DEBUGFLAGS) $(TESTDIR) $(SRCDIR)/*.erl
+	@ $(ERLC) $(TESTFLAGS) $(TESTDIR) $(SRCDIR)/*.erl
 	@ echo "$(NORMAL)    Done"
+	@ echo "$(PURPLE)==> Hiding Test Files$(NORMAL)"
+	@ mkdir -p $(TESTDIR)/tmp
+	@ mv $(TESTDIR)/*_tests.beam $(TESTDIR)/tmp || true
+	@ echo "    Done"
 	@ echo "$(PURPLE)==> Running Dialyzer$(NORMAL)"
 	@ $(DIALYZER) $(TESTDIR)/*.beam || true
 	@ echo "$(PURPLE)==> Running Elvis$(NORMAL)"
 	@ $(ELVIS) || true
 	@ echo "    Done"
+	@ echo "$(PURPLE)==> Revealing Test Files$(NORMAL)"
+	@ echo "    Done"
+	@ mv $(TESTDIR)/tmp/*_tests.beam $(TESTDIR)/ || true
+	@ echo "$(PURPLE)==> Running EUnit Tests$(NORMAL)"
+	@ echo "  Running tests for module: pkgargs"
+	@ $(ERL) -pa $(TESTDIR) -noinput -noshell -s pkgargs eunit
 	@ echo "$(PURPLE)==> Finished Testing, results are printed to console$(NORMAL)"
 	@ echo "    Done\n"
 .PHONY: lint
 lint:
 	@ echo "==> Linting Project with Elvis"
 	@ $(ELVIS) || true
+	@ echo "    Done\n"
+.PHONY: eunit
+eunit:
+	@ echo "==> Building TEST"
+	@ echo "    Compiling files with debug_info enabled"
+	@ echo "    Compiling files with warnings ignored"
+	@ echo "    Compiling files will fail if any errors occur"
+	@ mkdir -p $(TESTDIR)
+	@ rm -rf $(TESTDIR)/*
+	@ echo "==> Compiling Source Files"
+	@ $(ERLC) $(TESTFLAGS) $(TESTDIR) $(SRCDIR)/*.erl
+	@ echo "    Done"
+	@ echo "==> Running EUnit Tests"
+	@ echo "  Running tests for module: pkgargs"
+	@ $(ERL) -pa $(TESTDIR) -noinput -noshell -s pkgargs eunit
 	@ echo "    Done\n"
 .PHONY: clean
 clean:

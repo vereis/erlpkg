@@ -15,7 +15,7 @@
 
 -define(DEFAULT_ARGS, [
     {["-e", "--entrypoint"], o_entry,  singleton, default, "Sets the entry point for the erlpkg which is the " ++
-                                                           "module we start the erlpkg from. The default value for" ++
+                                                           "module we start the erlpkg from. The default value for " ++
                                                            "this is the first module argument provided."},
     {["-o", "--output"],     o_output, singleton, default, "Sets the output name for the erlpkg. The default " ++
                                                            "value for this is the first module argument provided " ++
@@ -37,7 +37,6 @@
 %%% ---------------------------------------------------------------------------------------------%%%
 
 %% Entrypoint into erlpkg
-
 main() ->
     main(init:get_plain_arguments()).
 
@@ -214,7 +213,7 @@ usage() ->
 help() ->
     io:format("Configuration Parameters:~n" ++
               "~s~n",
-              [pkgargs:create_help_string(?DEFAULT_ARGS, 1, 21)]).
+              [pkgargs:create_help_string(?DEFAULT_ARGS, 1, 45)]).
 
 %% Displays version information
 version() ->
