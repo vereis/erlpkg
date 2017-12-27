@@ -76,7 +76,7 @@ parse_args(Args, ArgsBuffer, OpMap, OpDef) ->
     parse_args(Args, ArgsBuffer#{?DEFAULT_ARG_ID => []}, OpMap, OpDef, default).
 
 %% When there are no arguments remaining to parse, just return ArgsBuffer.
-parse_args([], ArgsBuffer, _, _, _) ->
+parse_args([], ArgsBuffer, _, _, default) ->
     ArgsBuffer;
 
 %% In the 'default' parse_args option_type, we check to see whether or not the CTok
@@ -100,6 +100,7 @@ parse_args(Args, ArgsBuffer, OpMap, OpDef, default) ->
                 ?DEFAULT_ARG_ID := maps:get(?DEFAULT_ARG_ID, ArgsBuffer) ++ [CTok]
             }
     end,
+
     parse_args(RToks, UpdatedArgsBuffer, OpMap, OpDef, OpType);
 
 %% When in the 'is_set' state, we simply update ArgsBuffer to set the PrevTokId
