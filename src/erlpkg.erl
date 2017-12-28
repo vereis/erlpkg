@@ -14,19 +14,23 @@
     -export([
         main/0,
         main/1,
-        build/3
+        build/4
     ]).
 -endif.
 
 -define(DEFAULT_ARGS, [
-    {["-e", "--entrypoint"], o_entry,  singleton, default, "Sets the entry point for the erlpkg which is the " ++
-                                                           "module we start the erlpkg from. The default value for " ++
-                                                           "this is the first module argument provided."},
-    {["-o", "--output"],     o_output, singleton, default, "Sets the output name for the erlpkg. The default " ++
-                                                           "value for this is the first module argument provided " ++
-                                                           "with the extension '.erlpkg'"},
-    {["-h", "--help"],       o_help,   is_set,    false,   "Displays this help message and exits."},
-    {["-v", "--version"],    o_vsn,    is_set,    false,   "Displays current build version."}
+    {["-e", "--entrypoint"], o_entry,        singleton, default, "Sets the entry point for the erlpkg which is the " ++
+                                                                 "module we start the erlpkg from. The default value for " ++
+                                                                 "this is the first module argument provided."},
+    {["-o", "--output"],     o_output,       singleton, default, "Sets the output name for the erlpkg. The default " ++
+                                                                 "value for this is the first module argument provided " ++
+                                                                 "with the extension '.erlpkg'"},
+    {["-h", "--help"],       o_help,         is_set,    false,   "Displays this help message and exits."},
+    {["-v", "--version"],    o_vsn,          is_set,    false,   "Displays current build version."},
+    {["--no-utils"],         o_no_pkg_utils, is_set,    false,   "Disable automatic inclusion of erlpkg pkg* modules to " ++
+                                                                 "packages built by erlpkg. If unset, all packages built " ++
+                                                                 "by erlpkg will include pkgargs and pkgutil modules for " ++
+                                                                 "convenience."}
 ]).
 
 -define(COND(Cond, A, B), [
@@ -58,6 +62,9 @@ main(Args) ->
     % Set ShowVsn to true or false depending on whether or not it was specified in args
     ShowVsn = pkgargs:get(o_vsn, ParsedArgs),
 
+    % Set NoAttachPkgs to true or false depending on whether or not it was specified in args
+    AttachPkgs = pkgargs:get(o_no_pkg_utils, ParsedArgs) =:= false,
+
     % Get a list of files from args to include in escript pkg
     Files = perform_wildcard_matches(pkgargs:get(default,  ParsedArgs)),
 
@@ -73,7 +80,7 @@ main(Args) ->
                     default_pkg_name(Files),
                     pkgargs:get(o_output, ParsedArgs)),
 
-    try branch(Files, Entrypoint, PkgName, ShowHelp, ShowVsn) of
+    try branch(Files, Entrypoint, PkgName, ShowHelp, ShowVsn, AttachPkgs) of
         _ -> ok
     catch
         throw:usage ->
@@ -108,15 +115,16 @@ main(Args) ->
 %%% ---------------------------------------------------------------------------------------------%%%
 
 %% Determines which function to run depending on arguments given.
-branch(Files, Entrypoint, PkgName, _ShowHelp = false, _ShowVsn = false) when length(Files) > 0 ->
-    build(Files, Entrypoint, PkgName);
-branch(_, _, _, _ShowHelp = false, _ShowVsn = false) ->
+branch(Files, Entrypoint, PkgName, 
+       _ShowHelp = false, _ShowVsn = false, AttachPkgs) when length(Files) > 0 ->
+    build(Files, Entrypoint, PkgName, AttachPkgs);
+branch(_, _, _, _ShowHelp = false, _ShowVsn = false, _) ->
     throw(usage);
-branch(_, _, _, _ShowHelp = true, _ShowVsn = false) ->
+branch(_, _, _, _ShowHelp = true, _ShowVsn = false, _) ->
     throw(help);
-branch(_, _, _, _ShowHelp = false, _ShowVsn = true) ->
+branch(_, _, _, _ShowHelp = false, _ShowVsn = true, _) ->
     throw(vsn);
-branch(_, _, _, _, _) ->
+branch(_, _, _, _, _, _) ->
     throw(unknown).
 
 
@@ -134,18 +142,17 @@ branch(_, _, _, _, _) ->
 %%        the main entrypoint said escript. I.e. running erlpkg on itself with
 %%        'erlpkg erlpkg erlpkg.erl' will produce a working erlpkg escript whereas
 %%        trying to create an escript with 'erlpkg erlpkg_escript erlpkg.erl' will not.
-build(Files, Entrypoint, PkgName) ->
+build(Files, Entrypoint, PkgName, AttachPkgs) ->
     io:format("Preparing to build package: ~s...~n", [PkgName]),
 
     % Include erlpkg utilities in Files before proceeding if we are being run as an erlpkg
     % ourselves
-    case pkgutils:pkg_is_erlpkg() of
+    case pkgutils:pkg_is_erlpkg() and AttachPkgs of
         true ->
-            io:format("Note - Running as Erlpkg~n"),
             PkgFiles = [pkgutils:pkg_extract_file("pkgargs.beam"),
                         pkgutils:pkg_extract_file("pkgutils.beam") | Files];
         _ ->
-            io:format("Note - Not running as Erlpkg~n"),
+            io:format("Note - Not attaching erlpkg utility modules~n"),
             PkgFiles = Files
     end,
 
@@ -242,7 +249,7 @@ usage() ->
 help() ->
     io:format("Configuration Parameters:~n" ++
               "~s~n",
-              [pkgargs:create_help_string(?DEFAULT_ARGS, 1, 45)]).
+              [pkgargs:create_help_string(?DEFAULT_ARGS, 1, 55)]).
 
 %% Displays version information
 version() ->
