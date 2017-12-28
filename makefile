@@ -86,13 +86,17 @@ test:
 	@ $(ELVIS) || true
 	@ echo "    Done"
 	@ echo "$(PURPLE)==> Revealing Test Files$(NORMAL)"
-	@ echo "    Done"
 	@ mv $(TESTDIR)/tmp/*_tests.beam $(TESTDIR)/ || true
+	@ rm -rf $(TESTDIR)/tmp/
+	@ echo "    Done"
 	@ echo "$(PURPLE)==> Running EUnit Tests$(NORMAL)"
 	@ echo "  Running tests for module: erlpkg"
-	@ $(ERL) -pa $(TESTDIR) -noinput -noshell -s erlpkg eunit
+	@ cd $(TESTDIR) && $(ERL) -pa $(TESTDIR) -noinput -noshell -s erlpkg eunit
 	@ echo "  Running tests for module: pkgargs"
-	@ $(ERL) -pa $(TESTDIR) -noinput -noshell -s pkgargs eunit
+	@ cd $(TESTDIR) && $(ERL) -pa $(TESTDIR) -noinput -noshell -s pkgargs eunit
+	@ echo "  Running tests for module: pkgutils"
+	@ cd $(TESTDIR) && $(ERL) -pa $(TESTDIR) -noinput -noshell -s pkgutils eunit
+	@ echo "    Done"
 	@ echo "$(PURPLE)==> Finished Testing, results are printed to console$(NORMAL)"
 	@ echo "    Done\n"
 .PHONY: lint
@@ -100,6 +104,20 @@ lint:
 	@ echo "==> Linting Project with Elvis"
 	@ $(ELVIS) || true
 	@ echo "    Done\n"
+.PHONY: dialyze
+dialyze:
+	@ echo "==> Building TEST"
+	@ echo "    Compiling files with debug_info enabled"
+	@ echo "    Compiling files with warnings ignored"
+	@ echo "    Compiling files will fail if any errors occur"
+	@ mkdir -p $(TESTDIR)
+	@ rm -rf $(TESTDIR)/*
+	@ echo "==> Compiling Source Files"
+	@ $(ERLC) $(TESTFLAGS) $(TESTDIR) $(SRCDIR)/*.erl
+	@ rm -rf $(TESTDIR)/*_tests.beam
+	@ echo "    Done"
+	@ echo "==> Running Dialyzer"
+	@ $(DIALYZER) $(TESTDIR)/*.beam || true
 .PHONY: eunit
 eunit:
 	@ echo "==> Building TEST"
@@ -113,9 +131,11 @@ eunit:
 	@ echo "    Done"
 	@ echo "==> Running EUnit Tests"
 	@ echo "  Running tests for module: erlpkg"
-	@ $(ERL) -pa $(TESTDIR) -noinput -noshell -s erlpkg eunit
+	@ cd $(TESTDIR) && $(ERL) -pa $(TESTDIR) -noinput -noshell -s erlpkg eunit
 	@ echo "  Running tests for module: pkgargs"
-	@ $(ERL) -pa $(TESTDIR) -noinput -noshell -s pkgargs eunit
+	@ cd $(TESTDIR) && $(ERL) -pa $(TESTDIR) -noinput -noshell -s pkgargs eunit
+	@ echo "  Running tests for module: pkgutils"
+	@ cd $(TESTDIR) && $(ERL) -pa $(TESTDIR) -noinput -noshell -s pkgutils eunit
 	@ echo "    Done\n"
 .PHONY: clean
 clean:
