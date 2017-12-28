@@ -87,11 +87,12 @@ pkg_extract(ExtractPath) ->
 
     % Prepare to extract files to Extract path
     ExtractFile = fun({DataName, DataBinary}) ->
-        file:write_file(lists:flatten([ExtractPath, "/", DataName]), DataBinary)
+        OutName = lists:flatten([ExtractPath, "/", DataName]),
+        ok = file:write_file(OutName, DataBinary),
+        OutName
     end,
 
-    [ExtractFile(File) || File <- Files],
-    ok.
+    [ExtractFile(File) || File <- Files].
 
 %% Extracts a file which is included in erlpkg. If no argument for ExtractPath is given we
 %% automatically extract to /tmp/pkg_name()/
@@ -108,7 +109,10 @@ pkg_extract_file(FileName, ExtractPath) ->
             {ok, Data} = file:read_file(FileName),
             {DataName, DataBinary} = {filename:basename(FileName), Data}
     end,
-    ok = file:write_file(lists:flatten([ExtractPath, "/", DataName]), DataBinary).
+
+    OutName = lists:flatten([ExtractPath, "/", DataName]),
+    file:write_file(OutName, DataBinary),
+    OutName.
 
 %% Directories in erlpkgs are zipped and thus, when extracting a directory from an erlpkg we need
 %% to perform extra extraction steps. If no ExtractPath is given we extract to /tmp/pkg_name()/
@@ -211,7 +215,7 @@ pkg_reflect(archive) ->
 
 %% Opens the current erlpkg so that we can get data from it
 pkg_open() ->
-    {ok, Handle} = zip:zip_open(pkg_reflect(archive)),
+    {ok, Handle} = zip:zip_open(pkg_reflect(archive), [memory]),
     Handle.
 
 %% Closes the given handle to an erlpkg

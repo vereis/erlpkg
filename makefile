@@ -3,9 +3,9 @@ SHELL = /bin/sh
 # Compilation Variables
 ERL = $(shell which erl)
 ERLC = $(shell which erlc)
-ERLFLAGS = -DERLPKG -Werror -v -o
-DEBUGFLAGS = -DERLPKG -Ddebug +debug_info -W0 -o
-TESTFLAGS = -DERLPKG -Ddebug -DTEST +debug_info -W0 -o
+ERLFLAGS = -Werror -v -o
+DEBUGFLAGS = -Ddebug +debug_info -W0 -o
+TESTFLAGS = -Ddebug -DTEST +debug_info -W0 -o
 
 # Directory Variables
 SRCDIR = src
@@ -38,8 +38,10 @@ release:
 	@ $(ERLC) $(ERLFLAGS) $(OUTDIR) $(SRCDIR)/*.erl
 	@ echo "$(NORMAL)    Done"
 	@ echo "$(GREEN)==> Building Erlpkg Binary$(NORMAL)"
-	@ cd $(OUTDIR) && ($(ERL) -pa $(OUTDIR) -noinput -noshell -s erlpkg main erlpkg.beam pkgargs.beam pkgutils.beam >> /dev/null) && cd ..
+	@ cp $(SRCDIR)/*.erl $(OUTDIR)/
+	@ cd $(OUTDIR) && ($(ERL) -pa $(OUTDIR) -noinput -noshell -s erlpkg main erlpkg.erl pkgargs.erl pkgutils.erl >> /dev/null) && cd ..
 	@ rm -f $(OUTDIR)/*.beam
+	@ rm -f $(OUTDIR)/*.erl
 	@ mv $(OUTDIR)/erlpkg.erlpkg $(OUTDIR)/erlpkg
 	@ echo "$(NORMAL)    Done"
 	@ echo "$(GREEN)==> RELEASE release successfully built in './$(OUTDIR)/'$(NORMAL)"
@@ -55,13 +57,15 @@ debug:
 	@ $(ERLC) $(DEBUGFLAGS) $(DEBUGDIR) $(SRCDIR)/*.erl
 	@ echo "$(NORMAL)    Done"
 	@ echo "$(BLUE)==> Building Erlpkg Binary"
-	@ cd $(DEBUGDIR)
-	@ cd $(DEBUGDIR) && ($(ERL) -pa $(DEBUGDIR) -noinput -noshell -s erlpkg main erlpkg.beam pkgargs.beam pkgutils.beam >> /dev/null) && cd ..
+	@ cp $(SRCDIR)/*.erl $(DEBUGDIR)/
+	@ cd $(DEBUGDIR) && ($(ERL) -pa $(DEBUGDIR) -noinput -noshell -s erlpkg main erlpkg.erl pkgargs.erl pkgutils.erl >> /dev/null) && cd ..
 	@ rm -f $(DEBUGDIR)/*.beam
+	@ rm -f $(DEBUGDIR)/*.erl
 	@ mv $(DEBUGDIR)/erlpkg.erlpkg $(DEBUGDIR)/erlpkg
 	@ echo "$(NORMAL)    Done"
 	@ echo "$(BLUE)==> DEBUG release successfully built in './$(DEBUGDIR)/'$(NORMAL)"
 	@ echo "    Done\n"
+.PHONY: test
 test:
 	@ echo "$(PURPLE)==> Building TEST$(NORMAL)"
 	@ echo "    Compiling files with debug_info enabled"

@@ -136,14 +136,29 @@ branch(_, _, _, _, _) ->
 %%        trying to create an escript with 'erlpkg erlpkg_escript erlpkg.erl' will not.
 build(Files, Entrypoint, PkgName) ->
     io:format("Preparing to build package: ~s...~n", [PkgName]),
-    PkgHeader = build_header(Entrypoint),
-    PkgContents = [build_file(File) || File <- Files],
 
-    % Include erlpkg utilities in Files
+    % Include erlpkg utilities in Files before proceeding if we are being run as an erlpkg
+    % ourselves
+    case pkgutils:pkg_is_erlpkg() of
+        true ->
+            io:format("Note - Running as Erlpkg~n"),
+            PkgFiles = [pkgutils:pkg_extract_file("pkgargs.beam"),
+                        pkgutils:pkg_extract_file("pkgutils.beam") | Files];
+        _ ->
+            io:format("Note - Not running as Erlpkg~n"),
+            PkgFiles = Files
+    end,
+
+    % Generate data we need to put into escript
+    PkgHeader = build_header(Entrypoint),
+    PkgContents = [build_file(File) || File <- PkgFiles],
 
     {ok, {_, Zip}} = zip:create(PkgName, PkgContents, [memory, {compress, all}]),
     Pkg = iolist_to_binary([PkgHeader, Zip]),
     ok = file:write_file(PkgName, Pkg),
+
+    % Clean up pkgutil tmp directory
+    pkgutils:pkg_clean_tmp_dir(),
 
     io:format("Successfully built package: ~s~n~n", [PkgName]).
 
@@ -219,7 +234,7 @@ usage() ->
     SelfName = pkgutils:pkg_name(),
     io:format("Usage: ~s FILE... [-e <module>] [-o <filename>]~n" ++
               "Generates an Erlang Escript with the FILEs you specify.~n" ++
-              "Example: ~s calc.erl sci_calc.erl stats_calc.erl -e calc -o calculator.erlpkg~n~n",
+              "Example: ~s src/*.erl -o ebin/example.erlpkg~n~n",
               [SelfName,
                SelfName]).
 
