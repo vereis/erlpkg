@@ -7,11 +7,16 @@
 
 -vsn(?VERSION).
 
--export([
-    main/0,
-    main/1,
-    build/3
-]).
+%% Export all functions if test build
+-ifdef(TEST).
+    -compile(export_all).
+-else.
+    -export([
+        main/0,
+        main/1,
+        build/3
+    ]).
+-endif.
 
 -define(DEFAULT_ARGS, [
     {["-e", "--entrypoint"], o_entry,  singleton, default, "Sets the entry point for the erlpkg which is the " ++
@@ -41,7 +46,11 @@ main() ->
     main(init:get_plain_arguments()).
 
 main(Args) ->
-    ParsedArgs = pkgargs:parse(Args, ?DEFAULT_ARGS),
+    % Normalize args to strings if they're atoms.
+    NArgs = [case is_atom(Arg) of true -> atom_to_list(Arg); false -> Arg end || Arg <- Args],
+
+    % Parse Normalized args
+    ParsedArgs = pkgargs:parse(NArgs, ?DEFAULT_ARGS),
 
     % Set ShowHelp to true or false depending on whether or not it was specified in args
     ShowHelp = pkgargs:get(o_help, ParsedArgs),
@@ -75,8 +84,11 @@ main(Args) ->
         throw:vsn ->
             version();
         throw:{bad_filename, File} ->
-            io:format("~s: Error - ~s is not a valid filename or could not be found.~n Aborting build.~n~n",
+            io:format("~s: Error - ~s is not a valid filename or could not be found.~nAborting build.~n~n",
                       [filename:basename(escript:script_name()), File]);
+        throw:{invalid, Thing} ->
+            io:format("~s: Invalid ~s given.~nAborting build.~n~n",
+                      [filename:basename(escript:script_name()), Thing]);
         E ->
             SelfName = filename:basename(escript:script_name()),
             io:format("~s: Unknown Error - ~s~n", [SelfName, E]),
@@ -222,13 +234,36 @@ version() ->
               ?VERSION]).
 
 %% Generates a default package name
-default_pkg_name([FirstFile | _]) ->
-    [filename:basename(filename:rootname(FirstFile)), ".erlpkg"];
+default_pkg_name([FirstFile | _]) when is_binary(FirstFile) ->
+    default_pkg_name([binary_to_list(FirstFile)]);
+default_pkg_name([FirstFile | _]) when is_list(FirstFile) , length(FirstFile) =:= 0 ->
+    throw({invalid, "package name"});
+default_pkg_name([FirstFile | _]) when is_list(FirstFile) ->
+    filename:basename(filename:rootname(FirstFile)) ++ ".erlpkg";
 default_pkg_name([]) ->
     "default_pkg_name.erlpkg".
 
 %% Generates a default entrypoint
-default_entrypoint([FirstFile | _]) ->
+default_entrypoint([FirstFile | _]) when is_binary(FirstFile) ->
+    default_entrypoint([binary_to_list(FirstFile)]);
+default_entrypoint([FirstFile | _]) when is_list(FirstFile) , length(FirstFile) =:= 0 ->
+    throw({invalid, "entry point"});
+default_entrypoint([FirstFile | _]) when is_list(FirstFile) ->
     filename:basename(filename:rootname(FirstFile));
 default_entrypoint([]) ->
     default.
+
+
+
+
+
+%%% ---------------------------------------------------------------------------------------------%%%
+%%% - META FUNCTIONS ----------------------------------------------------------------------------%%%
+%%% ---------------------------------------------------------------------------------------------%%%
+
+-ifdef(TEST).
+%% Start eunit testing for this module
+eunit() ->
+    eunit:test({inparallel, ?MODULE}),
+    init:stop().
+-endif.

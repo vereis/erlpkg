@@ -85,6 +85,8 @@ test:
 	@ echo "    Done"
 	@ mv $(TESTDIR)/tmp/*_tests.beam $(TESTDIR)/ || true
 	@ echo "$(PURPLE)==> Running EUnit Tests$(NORMAL)"
+	@ echo "  Running tests for module: erlpkg"
+	@ $(ERL) -pa $(TESTDIR) -noinput -noshell -s erlpkg eunit
 	@ echo "  Running tests for module: pkgargs"
 	@ $(ERL) -pa $(TESTDIR) -noinput -noshell -s pkgargs eunit
 	@ echo "$(PURPLE)==> Finished Testing, results are printed to console$(NORMAL)"
@@ -106,6 +108,8 @@ eunit:
 	@ $(ERLC) $(TESTFLAGS) $(TESTDIR) $(SRCDIR)/*.erl
 	@ echo "    Done"
 	@ echo "==> Running EUnit Tests"
+	@ echo "  Running tests for module: erlpkg"
+	@ $(ERL) -pa $(TESTDIR) -noinput -noshell -s erlpkg eunit
 	@ echo "  Running tests for module: pkgargs"
 	@ $(ERL) -pa $(TESTDIR) -noinput -noshell -s pkgargs eunit
 	@ echo "    Done\n"

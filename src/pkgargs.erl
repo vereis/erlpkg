@@ -314,4 +314,3 @@ eunit() ->
     eunit:test({inparallel, ?MODULE}),
     init:stop().
 -endif.
-
