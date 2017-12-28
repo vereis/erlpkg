@@ -10,6 +10,7 @@ Note that this project is still in development and very likely contains overlook
 
 ### Requirements
 - Erlang 18 (I assume other versions will work just fine, however, I've only tested this on a machine with Erlang 18 installed)
+- Some form of Linux? I primarily develop with ```Windows Subsystem for Linux``` running ```Ubuntu```. I've not tested anywhere else.
 
 ### Installing
 1) Clone the repo with ```git clone https://github.com/vereis/erlpkg``` in your command line. This should create a folder in the working directory called ```erlpkg```.
@@ -22,20 +23,30 @@ Once erlpkg is built, you can run it by simply providing it a list of files as a
 ```
 Which will produce an escript called ```erlpkg.erlpkg```. This is essentially how we build the escript for ```erlpkg``` itself.
 
-Additional arguments can be added to change certain parameters, currently, the only arguments added are ```-e``` which determines which module is the main module of the generated escript, and ```-o``` to allow us to specify the name of the generated escript.
+## Usage
+```erlpkg``` attempts to be as easy to use as possible, but it also contains slightly more advanced functions for more complex use-cases:
 
-This updated example might look like:
+### General Use Case
+You can build an erlpkg out of most types of files by simple running the ```erlpkg``` binary and passing in a list of files you want to include.
+
+By default, the assumed escript entrypoint is the first file in this list. You can override with with the ```-e MODULE``` command line option. The default output of ```erlpkg``` will simply be whatever the escript entrypoint is with the file extension ```.erlpkg```.
+
+An example of this usage might be:
 ```shell
-./erlpkg pkgagrs.erl erlpkg.erl -e erlpkg -o erlpkg
+./erlpkg fibonnaci.erl math.erl other_thing.beam main.erl -e main -o my_erl_pkg
 ```
-This will create an escript named ```erlpkg``` instead of ```erlpkg.erlpkg``` and won't fail to run because even though ```pkgargs.erl``` is the first file added to the escript, we explicitly tell ```erlpkg``` to set the main entrypoint to the ```erlpkg``` module instead. 
 
-More commands may be available so if you're curious run ```erlpkg -h``` for a help page.
+### Advanced Use Cases
+By default, ```erlpkg``` will automatically attach the modules ```pkgargs``` and ```pkgutils``` into anything it builds. This is to allow us to perform basic escript argument parsing in a nice way, generate ```--help``` messages automatically and poke at the contents of the escript if we need to.
 
-Note: Any type of file can be included in an escript as escripts are essentially just fancy zip files, right now theres no way to easily and cleanly utilise other files added into an escript but one can easily play around with them by manually unzipping the contents of the escript. Additional erlpkg modules are going to be written and included in generated escripts by default for this purpose.
+```pkgargs``` is our argument parsing library. Unfortunately, we don't have any documentation outside of reading the source code (although its all highly commented) at the moment, but you can use that to parse command line arguments which is actually what ```erlpkg``` itself does.
+
+```pkgutils``` also gives our packages the ability to list the files inside said packages, or even extract parts of the package to either an automatically generated temporary directory (usually ```/tmp/ERLPKG_NAME/```) or an arbitrary directory of your choice. This can be used for great effect if, say, like [Jarlang](https://github.com/vereis/jarlang), you need to extract some modules for use with ```NodeJS```. This is actually how ```erlpkg``` attaches these modules into generated packages!
+
+You can, however, disable the automatic attaching of ```pkgargs``` and ```pkgutils``` by providing ```erlpkg``` with the command line option ```--no-utils```.
 
 ### Automatic Testing
-We need to implement eunit testing, but other than that you can automatically run our linter, ```Elvis```, and our static analyser ```Dialyzer``` by running the command ```make test```.
+Simply run ```make test``` in the project root directory.
 
 ## Contribution Guidelines
 Please ensure automatic testing passes, when implemented, before pushing any commits. Also ensure you don't break the build.
