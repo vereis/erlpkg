@@ -139,8 +139,6 @@ pkg_extract_file(FileName, ExtractPath) ->
     OutName.
 -endif.
 
-
-
 %% Directories in erlpkgs are zipped and thus, when extracting a directory from an erlpkg we need
 %% to perform extra extraction steps. If no ExtractPath is given we extract to /tmp/pkg_name()/
 pkg_extract_dir(FileName) ->
@@ -177,8 +175,6 @@ pkg_extract_zip(_, _) ->
     not_yet_implemented.
 -endif.
 
-
-
 %% Returns path to temp dir for this erlpkg, also ensures tmp dir exists
 pkg_tmp_dir() ->
     Path = lists:flatten(["/tmp/", filename:rootname(pkg_name())]),
@@ -192,6 +188,8 @@ pkg_clean_tmp_dir() ->
     {ok, Files} = file:list_dir(TmpDir),
     [ok = file:delete(lists:flatten([TmpDir, "/", File])) || File <- Files],
     file:del_dir(pkg_tmp_dir()).
+
+
 
 
 
@@ -289,6 +287,8 @@ pkg_close(Handle) ->
 
 -ifdef(TEST).
 %% Start eunit testing for this module
+%% Note that we dont do this asynchronously because some tests make or remove files,
+%% and clean up after themselves. This will cause most extraction tests to fail.
 eunit() ->
     eunit:test(?MODULE),
     init:stop().
