@@ -65,25 +65,20 @@ pkg_is_erlpkg() ->
 
 %% Extracts all files included in erlpkg. If no argument is given we automatically extract
 %% to /tmp/pkg_name()/
+%% If we're an erlpkg, just get all the files in the current zip pkg and put them in a list,
+%% If we're not an erlpkg, get all the files in the current directory relative to this module
+%% and read those files into a list.
 pkg_extract() ->
     pkg_extract(pkg_tmp_dir()).
 
+-ifdef(ERLPKG).
 pkg_extract(ExtractPath) ->
-    % If we're an erlpkg, just get all the files in the current zip pkg and put them in a list,
-    % If we're not an erlpkg, get all the files in the current directory relative to this module
-    % and read those files into a list.
-    case pkg_is_erlpkg() of
-        true ->
-            Self = pkg_open(),
-            {ok, Files} = zip:zip_get(Self),
-            pkg_close(Self);
-        _ ->
-            ReadFile = fun(FileName) ->
-                {ok, Data} = file:read_file(FileName),
-                {filename:basename(FileName), Data}
-            end,
-            Files = [ReadFile(File) || File <- pkg_ls()]
-    end,
+    % Ensure ExtractPath exists before proceeding
+    ok = filelib:ensure_dir(ExtractPath),
+
+    Self = pkg_open(),
+    {ok, Files} = zip:zip_get(Self),
+    pkg_close(Self),
 
     % Prepare to extract files to Extract path
     ExtractFile = fun({DataName, DataBinary}) ->
@@ -93,26 +88,58 @@ pkg_extract(ExtractPath) ->
     end,
 
     [ExtractFile(File) || File <- Files].
+-else.
+pkg_extract(ExtractPath) ->
+    % Ensure ExtractPath exists before proceeding
+    ok = filelib:ensure_dir(ExtractPath),
+
+    ReadFile = fun(FileName) ->
+        {ok, Data} = file:read_file(FileName),
+        {filename:basename(FileName), Data}
+    end,
+    Files = [ReadFile(File) || File <- pkg_ls()],
+
+    % Prepare to extract files to Extract path
+    ExtractFile = fun({DataName, DataBinary}) ->
+        OutName = lists:flatten([ExtractPath, "/", DataName]),
+        ok = file:write_file(OutName, DataBinary),
+        OutName
+    end,
+
+    [ExtractFile(File) || File <- Files].
+-endif.
 
 %% Extracts a file which is included in erlpkg. If no argument for ExtractPath is given we
 %% automatically extract to /tmp/pkg_name()/
 pkg_extract_file(FileName) ->
     pkg_extract_file(FileName, pkg_tmp_dir()).
 
+-ifdef(ERLPKG).
 pkg_extract_file(FileName, ExtractPath) ->
-    case pkg_is_erlpkg() of
-        true ->
-            Self = pkg_open(),
-            {ok, {DataName, DataBinary}} = zip:zip_get(FileName, Self),
-            pkg_close(Self);
-        _ ->
-            {ok, Data} = file:read_file(FileName),
-            {DataName, DataBinary} = {filename:basename(FileName), Data}
-    end,
+    % Ensure ExtractPath exists before proceeding
+    ok = filelib:ensure_dir(ExtractPath),
+
+    Self = pkg_open(),
+    {ok, {DataName, DataBinary}} = zip:zip_get(FileName, Self),
+    pkg_close(Self),
 
     OutName = lists:flatten([ExtractPath, "/", DataName]),
     file:write_file(OutName, DataBinary),
     OutName.
+-else.
+pkg_extract_file(FileName, ExtractPath) ->
+    % Ensure ExtractPath exists before proceeding
+    ok = filelib:ensure_dir(ExtractPath),
+
+    {ok, Data} = file:read_file(FileName),
+    {DataName, DataBinary} = {filename:basename(FileName), Data},
+
+    OutName = lists:flatten([ExtractPath, "/", DataName]),
+    file:write_file(OutName, DataBinary),
+    OutName.
+-endif.
+
+
 
 %% Directories in erlpkgs are zipped and thus, when extracting a directory from an erlpkg we need
 %% to perform extra extraction steps. If no ExtractPath is given we extract to /tmp/pkg_name()/
@@ -125,19 +152,32 @@ pkg_extract_dir(FileName, ExtractPath) ->
 pkg_extract_zip(FileName) ->
     pkg_extract_zip(FileName, pkg_tmp_dir()).
 
+-ifdef(ERLPKG).
 pkg_extract_zip(FileName, ExtractPath) ->
+    % Ensure ExtractPath exists before proceeding
+    ok = filelib:ensure_dir(ExtractPath),
+
     % Open our erlpkg, making sure we deal with all the extracted stuff in memory so that we can
     % read the data we need and extract as needed
     Self = pkg_open(),
 
-    % Extract requested dir zip
-    {ok, {_, DirZipBinary}} = zip:zip_get(FileName, Self),
-
-    % Extract dir zip to specified directory
-    {ok, _} = zip:extract(DirZipBinary, [{cwd, lists:flatten(ExtractPath)}]),
+    try zip:zip_get(FileName, Self) of
+        {ok, {_, DirZipBinary}} ->
+            % Extract dir zip to specified directory
+            {ok, _} = zip:extract(DirZipBinary, [{cwd, lists:flatten(ExtractPath)}])
+    catch
+        _ ->
+            ok
+    end,
 
     % Close our erlpkg
     pkg_close(Self).
+-else.
+pkg_extract_zip(_, _) ->
+    not_yet_implemented.
+-endif.
+
+
 
 %% Returns path to temp dir for this erlpkg, also ensures tmp dir exists
 pkg_tmp_dir() ->
@@ -162,23 +202,24 @@ pkg_clean_tmp_dir() ->
 %% Lists files currently included in erlpkg
 %% When run when not included in an erlpkg, we list files in the current directory relative to
 %% to this module.
+-ifdef(ERLPKG).
 pkg_ls() ->
-    case pkg_is_erlpkg() of
-        true ->
-            % Read our own data and extract the archive, open it
-            Self = pkg_open(),
-            {ok, SelfData} = zip:zip_list_dir(Self),
+    % Read our own data and extract the archive, open it
+    Self = pkg_open(),
+    {ok, SelfData} = zip:zip_list_dir(Self),
 
-            % Produce a list of filenames that exist within the opened archive
-            GetFileName = fun({_, File, _, _, _, _}) -> File end,
-            Files = [GetFileName(F) || F <- SelfData, size(F) > 2],
+    % Produce a list of filenames that exist within the opened archive
+    GetFileName = fun({_, File, _, _, _, _}) -> File end,
+    Files = [GetFileName(F) || F <- SelfData, size(F) > 2],
 
-            % Close open archive
-            pkg_close(Self);
-        _ ->
-            Files = filelib:wildcard(lists:flatten([pkg_dir_path(), "/*"]))
-    end,
+    % Close open archive
+    pkg_close(Self);
     lists:sort(Files).
+-else.
+pkg_ls() ->
+    Files = filelib:wildcard(lists:flatten([pkg_dir_path(), "/*"])),
+    lists:sort(Files).
+-endif.
 
 %% Returns the current package name
 pkg_name() ->
@@ -187,11 +228,13 @@ pkg_name() ->
 %% Returns the current package location relative to current working directory
 %% escript:script_name() is undefined behaviour when called from outside an escript so
 %% we need to ifdef here to polyfill the behaviour for testing sake on the shell.
+-ifdef(ERLPKG).
 pkg_rel_path() ->
-    case pkg_is_erlpkg() of
-        true -> escript:script_name();
-        _    -> code:which(?MODULE)
-    end.
+    escript:script_name().
+-else.
+pkg_rel_path() ->
+    code:which(?MODULE).
+-endif.
 
 %% Returns the current absolute package location
 pkg_abs_path() ->
@@ -202,10 +245,14 @@ pkg_dir_path() ->
     filename:dirname(pkg_abs_path()).
 
 %% Returns binary data for escript
+-ifdef(ERLPKG).
 pkg_reflect() ->
     {ok, [_, _, {emu_args, EmuArgs}, {archive, Archive}]} = escript:extract(pkg_rel_path(), []),
     {EmuArgs, Archive}.
-
+-else.
+pkg_reflect() ->
+    {{emu_args, ""}, {archive, <<>>}}.
+-endif.
 pkg_reflect(emu_args) ->
     {EmuArgs, _} = pkg_reflect(),
     EmuArgs;
@@ -214,13 +261,26 @@ pkg_reflect(archive) ->
     Archive.
 
 %% Opens the current erlpkg so that we can get data from it
+-ifdef(ERLPKG).
 pkg_open() ->
     {ok, Handle} = zip:zip_open(pkg_reflect(archive), [memory]),
     Handle.
+-else.
+pkg_open() ->
+    ok.
+-endif.
 
 %% Closes the given handle to an erlpkg
+-ifdef(ERLPKG).
 pkg_close(Handle) ->
     zip:zip_close(Handle).
+-else.
+pkg_close(Handle) ->
+    ok.
+-endif.
+
+
+
 
 
 %%% ---------------------------------------------------------------------------------------------%%%
@@ -230,6 +290,14 @@ pkg_close(Handle) ->
 -ifdef(TEST).
 %% Start eunit testing for this module
 eunit() ->
-    eunit:test({inparallel, ?MODULE}),
+    eunit:test(?MODULE),
     init:stop().
+
+%% Create a test function so we can test an erlpkg version of this module
+main([Function]) ->
+    Fn = list_to_atom(Function),
+    apply(?MODULE, Fn, []);
+main([Function | Args]) ->
+    Fn = list_to_atom(Function),
+    apply(?MODULE, Fn, Args).
 -endif.
