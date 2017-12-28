@@ -3,9 +3,9 @@ SHELL = /bin/sh
 # Compilation Variables
 ERL = $(shell which erl)
 ERLC = $(shell which erlc)
-ERLFLAGS = -Werror -v -o
-DEBUGFLAGS = -Ddebug +debug_info -W0 -o
-TESTFLAGS = -Ddebug -DTEST +debug_info -W0 -o
+ERLFLAGS = -DERLPKG -Werror -v -o
+DEBUGFLAGS = -DERLPKG -Ddebug +debug_info -W0 -o
+TESTFLAGS = -DERLPKG -Ddebug -DTEST +debug_info -W0 -o
 
 # Directory Variables
 SRCDIR = src
@@ -38,7 +38,7 @@ release:
 	@ $(ERLC) $(ERLFLAGS) $(OUTDIR) $(SRCDIR)/*.erl
 	@ echo "$(NORMAL)    Done"
 	@ echo "$(GREEN)==> Building Erlpkg Binary$(NORMAL)"
-	@ cd $(OUTDIR) && ($(ERL) -pa $(OUTDIR) -noinput -noshell -s erlpkg main erlpkg.beam pkgargs.beam >> /dev/null) && cd ..
+	@ cd $(OUTDIR) && ($(ERL) -pa $(OUTDIR) -noinput -noshell -s erlpkg main erlpkg.beam pkgargs.beam pkgutils.beam >> /dev/null) && cd ..
 	@ rm -f $(OUTDIR)/*.beam
 	@ mv $(OUTDIR)/erlpkg.erlpkg $(OUTDIR)/erlpkg
 	@ echo "$(NORMAL)    Done"
@@ -56,7 +56,7 @@ debug:
 	@ echo "$(NORMAL)    Done"
 	@ echo "$(BLUE)==> Building Erlpkg Binary"
 	@ cd $(DEBUGDIR)
-	@ cd $(DEBUGDIR) && ($(ERL) -pa $(DEBUGDIR) -noinput -noshell -s erlpkg main erlpkg.beam pkgargs.beam >> /dev/null) && cd ..
+	@ cd $(DEBUGDIR) && ($(ERL) -pa $(DEBUGDIR) -noinput -noshell -s erlpkg main erlpkg.beam pkgargs.beam pkgutils.beam >> /dev/null) && cd ..
 	@ rm -f $(DEBUGDIR)/*.beam
 	@ mv $(DEBUGDIR)/erlpkg.erlpkg $(DEBUGDIR)/erlpkg
 	@ echo "$(NORMAL)    Done"

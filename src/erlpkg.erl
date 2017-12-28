@@ -59,7 +59,7 @@ main(Args) ->
     ShowVsn = pkgargs:get(o_vsn, ParsedArgs),
 
     % Get a list of files from args to include in escript pkg
-    Files = pkgargs:get(default,  ParsedArgs),
+    Files = perform_wildcard_matches(pkgargs:get(default,  ParsedArgs)),
 
     % Set entrypoint to either a specified entrypoint if set in args, or
     % to the default value for it
@@ -85,12 +85,12 @@ main(Args) ->
             version();
         throw:{bad_filename, File} ->
             io:format("~s: Error - ~s is not a valid filename or could not be found.~nAborting build.~n~n",
-                      [filename:basename(escript:script_name()), File]);
+                      [pkgutils:pkg_name(), File]);
         throw:{invalid, Thing} ->
             io:format("~s: Invalid ~s given.~nAborting build.~n~n",
-                      [filename:basename(escript:script_name()), Thing]);
+                      [pkgutils:pkg_name(), Thing]);
         E ->
-            SelfName = filename:basename(escript:script_name()),
+            SelfName = pkgutils:pkg_name(),
             io:format("~s: Unknown Error - ~s~n", [SelfName, E]),
             usage(),
             io:format("Try '~s --help' for more information.", [SelfName])
@@ -139,6 +139,8 @@ build(Files, Entrypoint, PkgName) ->
     PkgHeader = build_header(Entrypoint),
     PkgContents = [build_file(File) || File <- Files],
 
+    % Include erlpkg utilities in Files
+
     {ok, {_, Zip}} = zip:create(PkgName, PkgContents, [memory, {compress, all}]),
     Pkg = iolist_to_binary([PkgHeader, Zip]),
     ok = file:write_file(PkgName, Pkg),
@@ -179,7 +181,7 @@ build_file(Filename) when is_list(Filename) ->
 build_file(erl, Filename) ->
     io:format("==> Including Erlang source file: ~s~n", [Filename]),
     io:format("~4cCompiling Erlang source file in memory....~n", [$ ]),
-    {ok, ModuleName, CompiledFile} = compile:file(Filename, [binary]),
+    {ok, ModuleName, CompiledFile} = compile:file(Filename, [binary, {d, 'ERLPKG'}]),
     io:format("~4cok.~n", [$ ]),
     {atom_to_list(ModuleName) ++ ".beam", CompiledFile};
 
@@ -214,7 +216,7 @@ build_file(_, Filename) ->
 
 %% Displays usage information
 usage() ->
-    SelfName = filename:basename(escript:script_name()),
+    SelfName = pkgutils:pkg_name(),
     io:format("Usage: ~s FILE... [-e <module>] [-o <filename>]~n" ++
               "Generates an Erlang Escript with the FILEs you specify.~n" ++
               "Example: ~s calc.erl sci_calc.erl stats_calc.erl -e calc -o calculator.erlpkg~n~n",
@@ -230,7 +232,7 @@ help() ->
 %% Displays version information
 version() ->
     io:format("Current ~s version: v~s~n~n",
-              [filename:basename(escript:script_name()),
+              [pkgutils:pkg_name(),
               ?VERSION]).
 
 %% Generates a default package name
@@ -253,8 +255,20 @@ default_entrypoint([FirstFile | _]) when is_list(FirstFile) ->
 default_entrypoint([]) ->
     default.
 
-
-
+%% Looks through a list of file names and expands any wildcards that may exist.
+%% None wildcards will just be added to the accumulator so that we can crash gracefully
+%% later on.
+perform_wildcard_matches([]) ->
+    [];
+perform_wildcard_matches(FileList) ->
+    lists:foldl(fun(PotentialWildcard, Accumulator) ->
+        case filelib:wildcard(PotentialWildcard) of
+            [] ->
+                Accumulator ++ [PotentialWildcard];
+            Matches ->
+                Accumulator ++ Matches
+        end
+    end, [], FileList).
 
 
 %%% ---------------------------------------------------------------------------------------------%%%
