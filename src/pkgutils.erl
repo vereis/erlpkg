@@ -187,8 +187,7 @@ pkg_tmp_dir() ->
 %% we will need to delete all the files in said directory first.
 pkg_clean_tmp_dir() ->
     TmpDir = pkg_tmp_dir(),
-    {ok, Files} = file:list_dir(TmpDir),
-    [ok = file:delete(lists:flatten([TmpDir, "/", File])) || File <- Files],
+    os:cmd(lists:flatten(["rm -rf ", TmpDir])),
     file:del_dir(pkg_tmp_dir()).
 
 

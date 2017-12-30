@@ -190,11 +190,11 @@ build_file(Filename) when is_binary(Filename) ->
     build_file(binary_to_list(Filename));
 build_file(Filename) when is_list(Filename) ->
     case file:read_file_info(Filename) of
-        {ok, FileInfo} ->
-            case tuple_to_list(FileInfo) of
-                [file_info, _, directory | _] ->
+        {ok, _} ->
+            case filelib:is_dir(Filename) of
+                true ->
                     build_file(dir, Filename);
-                [file_info, _, regular | _] ->
+                _ ->
                     [$. | Type] = filename:extension(Filename),
                     build_file(list_to_atom(Type), Filename)
             end;
@@ -211,7 +211,7 @@ build_file(erl, Filename) ->
     io:format("~4cok.~n", [$ ]),
     {atom_to_list(ModuleName) ++ ".beam", CompiledFile};
 
-%% Zips up a directory and returns its binary data so we can add it to an escript package
+%% Reads a given directory
 build_file(dir, Filename) ->
     io:format("==> Including directory: ~s~n", [Filename]),
     io:format("~4cCompressing and zipping directory in memory....~n", [$ ]),
