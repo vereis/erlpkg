@@ -34,7 +34,9 @@
         pkg_reflect/0,
         pkg_reflect/1,
         pkg_tmp_dir/0,
-        pkg_clean_tmp_dir/0
+        pkg_clean_tmp_dir/0,
+        pkg_open/0,
+        pkg_close/1
     ]).
 -endif.
 
@@ -211,7 +213,7 @@ pkg_ls() ->
     Files = [GetFileName(F) || F <- SelfData, size(F) > 2],
 
     % Close open archive
-    pkg_close(Self);
+    pkg_close(Self),
     lists:sort(Files).
 -else.
 pkg_ls() ->
@@ -273,7 +275,7 @@ pkg_open() ->
 pkg_close(Handle) ->
     zip:zip_close(Handle).
 -else.
-pkg_close(Handle) ->
+pkg_close(_Handle) ->
     ok.
 -endif.
 

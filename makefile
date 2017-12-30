@@ -58,7 +58,7 @@ debug:
 	@ echo "$(NORMAL)    Done"
 	@ echo "$(BLUE)==> Building Erlpkg Binary"
 	@ cp $(SRCDIR)/*.erl $(DEBUGDIR)/
-	@ cd $(DEBUGDIR) && ($(ERL) -pa $(DEBUGDIR) -noinput -noshell -s erlpkg main erlpkg.erl pkgargs.erl pkgutils.erl >> /dev/null) && cd ..
+	@ cd $(DEBUGDIR) && ($(ERL) -pa $(DEBUGDIR) -noinput -noshell -s erlpkg main erlpkg.erl pkgargs.erl pkgutils.erl) && cd ..
 	@ rm -f $(DEBUGDIR)/*.beam
 	@ rm -f $(DEBUGDIR)/*.erl
 	@ mv $(DEBUGDIR)/erlpkg.erlpkg $(DEBUGDIR)/erlpkg
