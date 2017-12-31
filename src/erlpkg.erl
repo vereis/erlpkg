@@ -46,14 +46,28 @@
 
 
 %%% ---------------------------------------------------------------------------------------------%%%
+%%% - TYPE DEFINITIONS --------------------------------------------------------------------------%%%
+%%% ---------------------------------------------------------------------------------------------%%%
+
+-type input_args() :: [atom() | string()].
+-type module_name() :: file:name_all().
+-type pkg_name() :: file:name_all().
+-type pkg_content() :: {string(), binary()}.
+
+
+
+
+
+%%% ---------------------------------------------------------------------------------------------%%%
 %%% - PUBLIC FUNCTIONS --------------------------------------------------------------------------%%%
 %%% ---------------------------------------------------------------------------------------------%%%
 
 %% Entrypoint into erlpkg
+-spec main() -> ok.
 main() ->
     main(init:get_plain_arguments()).
 
--spec main([string()] | [atom()]) -> ok.
+-spec main(input_args()) -> ok.
 main(Args) ->
     % Normalize args to strings if they're atoms.
     NArgs = [case is_atom(Arg) of true -> atom_to_list(Arg); false -> Arg end || Arg <- Args],
@@ -120,6 +134,10 @@ main(Args) ->
 %%% ---------------------------------------------------------------------------------------------%%%
 
 %% Determines which function to run depending on arguments given.
+-spec branch([file:filename_all(), ...], module_name(), pkg_name(), false, false, boolean()) -> ok;
+            ([file:filename_all()], module_name(), pkg_name(), true, true, boolean())    -> no_return();
+            ([file:filename_all()], module_name(), pkg_name(), false, true, boolean())   -> no_return();
+            ([file:filename_all()], module_name(), pkg_name(), true, false, boolean())   -> no_return().
 branch(Files, Entrypoint, PkgName,
        _ShowHelp = false, _ShowVsn = false, AttachPkgs) when length(Files) > 0 ->
     build(Files, Entrypoint, PkgName, AttachPkgs);
@@ -147,6 +165,7 @@ branch(_, _, _, _, _, _) ->
 %%        the main entrypoint said escript. I.e. running erlpkg on itself with
 %%        'erlpkg erlpkg erlpkg.erl' will produce a working erlpkg escript whereas
 %%        trying to create an escript with 'erlpkg erlpkg_escript erlpkg.erl' will not.
+-spec build([file:filename_all(), ...], module_name(), pkg_name(), boolean()) -> ok | no_return().
 build(Files, Entrypoint, PkgName, AttachPkgs) ->
     io:format("Preparing to build package: ~s...~n", [PkgName]),
 
@@ -172,9 +191,11 @@ build(Files, Entrypoint, PkgName, AttachPkgs) ->
     % Clean up pkgutil tmp directory
     pkgutils:pkg_clean_tmp_dir(),
 
-    io:format("Successfully built package: ~s~n~n", [PkgName]).
+    io:format("Successfully built package: ~s~n~n", [PkgName]),
+    ok.
 
 %% Shorthand for building escript headers
+-spec build_header(module_name()) -> iolist().
 build_header(Entrypoint) ->
     [
         <<"#!/usr/bin/env escript\n%%! -A0 +sbtu">>,
@@ -185,6 +206,7 @@ build_header(Entrypoint) ->
 
 %% Processes a file and appends its data to an escript package. Determines how to process given file
 %% by reading file info to check whether or not input is a directory, and if it isn't, reading file extension.
+-spec build_file(file:filename_all()) -> pkg_content() | no_return().
 build_file(Filename) when is_atom(Filename) ->
     build_file(atom_to_list(Filename));
 build_file(Filename) when is_binary(Filename) ->
@@ -205,6 +227,7 @@ build_file(Filename) when is_list(Filename) ->
 
 %% Compiles a given erlang source file and returns its binary data so we can add it to an escript
 %% package.
+-spec build_file(any(), file:filename_all()) -> pkg_content().
 build_file(erl, Filename) ->
     io:format("==> Including Erlang source file: ~s~n", [Filename]),
     io:format("~4cCompiling Erlang source file in memory....~n", [$ ]),
@@ -242,6 +265,7 @@ build_file(_, Filename) ->
 %%% ---------------------------------------------------------------------------------------------%%%
 
 %% Displays usage information
+-spec usage() -> no_return().
 usage() ->
     SelfName = pkgutils:pkg_name(),
     io:format("Usage: ~s FILE... [-e <module>] [-o <filename>]~n" ++
@@ -251,18 +275,21 @@ usage() ->
                SelfName]).
 
 %% Displays help information
+-spec help() -> no_return().
 help() ->
     io:format("Configuration Parameters:~n" ++
               "~s~n",
               [pkgargs:create_help_string(?DEFAULT_ARGS, 1, 55)]).
 
 %% Displays version information
+-spec version() -> no_return().
 version() ->
     io:format("Current ~s version: v~s~n~n",
               [pkgutils:pkg_name(),
               ?VERSION]).
 
 %% Generates a default package name
+-spec default_pkg_name([file:filename_all()]) -> file:filename_all() | file:name_all().
 default_pkg_name([FirstFile | _]) when is_binary(FirstFile) ->
     default_pkg_name([binary_to_list(FirstFile)]);
 default_pkg_name([FirstFile | _]) when is_list(FirstFile) , length(FirstFile) =:= 0 ->
@@ -273,6 +300,7 @@ default_pkg_name([]) ->
     "default_pkg_name.erlpkg".
 
 %% Generates a default entrypoint
+-spec default_entrypoint([file:filename_all()]) -> module_name().
 default_entrypoint([FirstFile | _]) when is_binary(FirstFile) ->
     default_entrypoint([binary_to_list(FirstFile)]);
 default_entrypoint([FirstFile | _]) when is_list(FirstFile) , length(FirstFile) =:= 0 ->
@@ -285,6 +313,7 @@ default_entrypoint([]) ->
 %% Looks through a list of file names and expands any wildcards that may exist.
 %% None wildcards will just be added to the accumulator so that we can crash gracefully
 %% later on.
+-spec perform_wildcard_matches([file:filename_all()]) -> [file:filename_all()].
 perform_wildcard_matches([]) ->
     [];
 perform_wildcard_matches(FileList) ->
@@ -304,6 +333,7 @@ perform_wildcard_matches(FileList) ->
 
 -ifdef(TEST).
 %% Start eunit testing for this module
+-spec eunit() -> ok.
 eunit() ->
     eunit:test({inparallel, ?MODULE}),
     init:stop().
