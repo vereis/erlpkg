@@ -17,12 +17,50 @@
     ]).
 -endif.
 
-
 %% Any arguments not matching a specified option_definition are returned as
 %% a list keyed by the value of this macro.
 -define(DEFAULT_ARG_ID, default).
-
 -define(DESC_INDENT_AMOUNT, 16).
+
+
+
+
+
+%%% ---------------------------------------------------------------------------------------------%%%
+%%% - TYPE DEFINITIONS --------------------------------------------------------------------------%%%
+%%% ---------------------------------------------------------------------------------------------%%%
+
+-type arg_name() :: [list()].
+-type arg_id() :: atom().
+-type arg_type() :: is_set | singleton | many | integer().
+-type arg_default() :: any().
+-type arg_description() :: string().
+
+-type arg_def() :: {ArgName::arg_name(), ArgId::arg_id(), ArgType::arg_type(),
+                    ArgDefault::arg_default(), ArgDescription::arg_description()}.
+
+-type arg_defs() :: [arg_def()].
+
+-type parsed_arg_key_value() :: {arg_id(), any()}.
+-type parsed_args_map() :: #{arg_id() => any()}.
+-type parsed_args_list() :: [parsed_arg_key_value()].
+
+-type arg_name_id_map() :: #{arg_name() => arg_id()}.
+
+-type arg_parse_mode() :: default | {string(), arg_type()}.
+
+-export_type([
+    arg_name/0,
+    arg_id/0,
+    arg_type/0,
+    arg_default/0,
+    arg_description/0,
+
+    arg_def/0,
+    arg_defs/0,
+    parsed_arg_key_value/0,
+    parsed_args_list/0
+]).
 
 %%% ---------------------------------------------------------------------------------------------%%%
 %%% - PUBLIC FUNCTIONS --------------------------------------------------------------------------%%%
@@ -59,15 +97,22 @@
 %%
 %%       - Description is a string which is used for generated help messages only.
 %%
+-spec parse([string()], arg_defs()) -> parsed_args_list().
+parse([], OpDefs) ->
+    [];
 parse(Args, OpDefs) ->
     OpMap = create_name_id_mapping(OpDefs),
     DefaultArgs = create_arg_defaults(OpDefs, OpMap),
     maps:to_list(parse_args(Args, DefaultArgs, OpMap, OpDefs)).
 
 %% Gets the value for an entry of a parsed argument
-get(Key, ParsedArgs) ->
+-spec get(arg_id(), parsed_args_map()) -> any();
+         (arg_id(), parsed_args_list()) -> any().
+get(Key, ParsedArgs) when is_list(ParsedArgs) ->
     {_Key, Value} = lists:keyfind(Key, 1, ParsedArgs),
-    Value.
+    Value;
+get(Key, ParsedArgs) when is_map(ParsedArgs) ->
+    maps:get(Key, ParsedArgs).
 
 
 
@@ -80,10 +125,12 @@ get(Key, ParsedArgs) ->
 %% Parses a list of strings, Args, updating ArgsBuffer as we go. Looks up
 %% OpMap and OpDefs while parsing to perform the correct action
 %% on the input string.
+-spec parse_args([string()], parsed_args_map(), arg_name_id_map(), arg_defs()) -> parsed_args_map().
 parse_args(Args, ArgsBuffer, OpMap, OpDef) ->
     parse_args(Args, ArgsBuffer#{?DEFAULT_ARG_ID => []}, OpMap, OpDef, default).
 
 %% When there are no arguments remaining to parse, just return ArgsBuffer.
+-spec parse_args([string()], parsed_args_map(), arg_name_id_map(), arg_defs(), arg_parse_mode()) -> parsed_args_map().
 parse_args([], ArgsBuffer, _, _, default) ->
     ArgsBuffer;
 
@@ -166,6 +213,7 @@ parse_args(Args, ArgsBuffer, OpMap, OpDef, {PrevTokId, N}) when is_integer(N)->
 %%      - We assume that the same option_name won't be used for several
 %%        option_ids and thus multiple definitions of the option_name will
 %%        most likely break. This is untested and unintended behaviour.
+-spec create_name_id_mapping(arg_defs()) -> arg_name_id_map().
 create_name_id_mapping(OpDefs) ->
     lists:foldl(fun({OpNames, OpId, _, _, _}, Mapping) ->
 
@@ -179,9 +227,10 @@ create_name_id_mapping(OpDefs) ->
     end, #{}, OpDefs).
 
 %% Returns a map of all option_ids with their default options already set.
-create_arg_defaults(OpDefs, Map) when is_map(Map) ->
+-spec create_arg_defaults(arg_defs(), arg_name_id_map()) -> parsed_args_map().
+create_arg_defaults(OpDefs, OpMapping) ->
     % Get a list of unique option_ids
-    OpIds = lists:usort(maps:values(Map)),
+    OpIds = lists:usort(maps:values(OpMapping)),
 
     % And fold over them, building up default_arg_container
     lists:foldl(fun(OpId, Mapping) ->
@@ -192,30 +241,35 @@ create_arg_defaults(OpDefs, Map) when is_map(Map) ->
 
 %% Takes an option_id and an option_definitions and returns the definition of
 %% that option.
+-spec get_option(arg_id(), arg_defs()) -> arg_def().
 get_option(OpId, OpDefs) ->
     lists:keyfind(OpId, 2, OpDefs).
 
 %% Takes an option_id and an option_definitions and returns the possible names of
 %% that option
-% get_option_names(OpId, OpDefs) ->
-%     {OpNames, _, _, _, _} = get_option(OpId, OpDefs),
-%     OpNames.
+-spec get_option_names(arg_id(), arg_defs()) -> arg_name().
+get_option_names(OpId, OpDefs) ->
+    {OpNames, _, _, _, _} = get_option(OpId, OpDefs),
+    OpNames.
 
 %% Takes an option_id and an option_definitions and returns the type of that option
+-spec get_option_type(arg_id(), arg_defs()) -> arg_type().
 get_option_type(OpId, OpDefs) ->
     {_, _, OpType, _, _} = get_option(OpId, OpDefs),
     OpType.
 
 %% Takes an option_id and an option_definitions and returns the default value of that
 %% option
+-spec get_option_default(arg_id(), arg_defs()) -> arg_default().
 get_option_default(OpId, OpDefs) ->
     {_, _, _, OpDef, _} = get_option(OpId, OpDefs),
     OpDef.
 
 %% Takes an option_id and an option_definitions and returns description of that option
-% get_option_desc(OpId, OpDefs) ->
-%     {_, _, _, _, Option_desc} = get_option(OpId, OpDefs),
-%     Option_desc.
+-spec get_option_desc(arg_id(), arg_defs()) -> arg_description().
+get_option_desc(OpId, OpDefs) ->
+    {_, _, _, _, OpDesc} = get_option(OpId, OpDefs),
+    OpDesc.
 
 
 
@@ -231,6 +285,7 @@ get_option_default(OpId, OpDefs) ->
 %%     {[A, ...] = OpNames, OpId, OpType, OpDef, Description}
 %%     ...
 %% ]
+-spec create_help_string(arg_defs(), non_neg_integer(), pos_integer()) -> [string()].
 create_help_string(OpDefs, LPad, MaxDescLen) ->
     % Firstly, generate the name_strings which tell the user what commands are available
     NameStrs = lists:sort(
@@ -255,7 +310,6 @@ create_help_string(OpDefs, LPad, MaxDescLen) ->
     LPadStr = [" " || _ <- lists:seq(1, LPad)],
 
     lists:map(fun({NameStr, Desc}) ->
-
         % We need this to correctly space the first line of the desc from the name_string
         NameColEnds = length(NameStr),
         NameDescSpace = DescBeginCol - NameColEnds,
@@ -288,14 +342,16 @@ create_help_string(OpDefs, LPad, MaxDescLen) ->
     end, NameStrs).
 
 %% Naively build a paragraph of lines Line_length long, seperated by new lines
+-spec parabreak(binary() | string(), pos_integer()) -> [string()].
 parabreak(String, MaxLen) when is_binary(String) ->
     parabreak(binary_to_list(String), MaxLen);
 parabreak(String, MaxLen) when is_list(String) ->
     [W | Ws] = string:tokens(String, " "),
     [lists:flatten([Line, "\n"]) || Line <- parabreak(Ws, MaxLen, [W], [])].
 
-parabreak([], _, CurLine, Lines) ->
-    Lines ++ [CurLine];
+-spec parabreak(string(), pos_integer(), iolist(), [iolist()]) -> iolist().
+parabreak([], _, L, Ls) ->
+    Ls ++ [L];
 parabreak([W | Ws], MaxLen, L, Ls) when length(L) + length(W) >= MaxLen ->
     parabreak(Ws, MaxLen, [W], Ls ++ [L]);
 parabreak([W | Ws], MaxLen, L, Ls) ->
@@ -310,6 +366,7 @@ parabreak([W | Ws], MaxLen, L, Ls) ->
 
 -ifdef(TEST).
 %% Start eunit testing for this module
+-spec eunit() -> ok.
 eunit() ->
     eunit:test({inparallel, ?MODULE}),
     init:stop().

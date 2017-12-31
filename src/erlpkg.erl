@@ -53,6 +53,7 @@
 main() ->
     main(init:get_plain_arguments()).
 
+-spec main([string()] | [atom()]) -> ok.
 main(Args) ->
     % Normalize args to strings if they're atoms.
     NArgs = [case is_atom(Arg) of true -> atom_to_list(Arg); false -> Arg end || Arg <- Args],
