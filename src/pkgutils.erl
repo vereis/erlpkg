@@ -45,14 +45,34 @@
 
 
 %%% ---------------------------------------------------------------------------------------------%%%
+%%% - TYPE DEFINITIONS --------------------------------------------------------------------------%%%
+%%% ---------------------------------------------------------------------------------------------%%%
+
+-type emu_args() :: {emu_args, string()}.
+-type pkg_archive() :: {archive, binary()}.
+-type escript_archive() :: {emu_args(), pkg_archive()}.
+
+-export_type([
+    emu_args/0,
+    pkg_archive/0,
+    escript_archive/0
+]).
+
+
+
+
+
+%%% ---------------------------------------------------------------------------------------------%%%
 %%% - PKG INFO ----------------------------------------------------------------------------------%%%
 %%% ---------------------------------------------------------------------------------------------%%%
 
 %% Determines whether or not this is being run from an erlpkg
 -ifdef(ERLPKG).
+-spec pkg_is_erlpkg() -> true.
 pkg_is_erlpkg() ->
     true.
 -else.
+-spec pkg_is_erlpkg() -> false.
 pkg_is_erlpkg() ->
     false.
 -endif.
@@ -70,6 +90,8 @@ pkg_is_erlpkg() ->
 %% If we're an erlpkg, just get all the files in the current zip pkg and put them in a list,
 %% If we're not an erlpkg, get all the files in the current directory relative to this module
 %% and read those files into a list.
+-spec pkg_extract() -> [file:filename_all()].
+-spec pkg_extract(file:filename_all()) -> [file:filename_all()].
 pkg_extract() ->
     pkg_extract(pkg_tmp_dir()).
 
@@ -113,6 +135,8 @@ pkg_extract(ExtractPath) ->
 
 %% Extracts a file which is included in erlpkg. If no argument for ExtractPath is given we
 %% automatically extract to /tmp/pkg_name()/
+-spec pkg_extract_file(file:filename_all()) -> file:filename_all().
+-spec pkg_extract_file(file:filename_all(), file:name_all()) -> file:filename_all().
 pkg_extract_file(FileName) ->
     pkg_extract_file(FileName, pkg_tmp_dir()).
 
@@ -143,6 +167,9 @@ pkg_extract_file(FileName, ExtractPath) ->
 
 %% Directories in erlpkgs are zipped and thus, when extracting a directory from an erlpkg we need
 %% to perform extra extraction steps. If no ExtractPath is given we extract to /tmp/pkg_name()/
+-spec pkg_extract_dir(file:filename_all()) -> ok | {error, einval}.
+-spec pkg_extract_zip(file:filename_all()) -> ok | {error, einval}.
+-spec pkg_extract_dir(file:filename_all(), file:name_all()) -> ok | {error, einval}.
 pkg_extract_dir(FileName) ->
     pkg_extract_zip(FileName).
 
@@ -174,10 +201,11 @@ pkg_extract_zip(FileName, ExtractPath) ->
     pkg_close(Self).
 -else.
 pkg_extract_zip(_, _) ->
-    not_yet_implemented.
+    ok.
 -endif.
 
 %% Returns path to temp dir for this erlpkg, also ensures tmp dir exists
+-spec pkg_tmp_dir() -> file:filename_all().
 pkg_tmp_dir() ->
     Path = lists:flatten(["/tmp/", filename:rootname(pkg_name())]),
     ok = filelib:ensure_dir(Path ++ "/"),
@@ -185,6 +213,7 @@ pkg_tmp_dir() ->
 
 %% Deletes temp dir for this erlpkg, because del_dir only works when a given directory is empty,
 %% we will need to delete all the files in said directory first.
+-spec pkg_clean_tmp_dir() -> ok | {error, _}.
 pkg_clean_tmp_dir() ->
     TmpDir = pkg_tmp_dir(),
     os:cmd(lists:flatten(["rm -rf ", TmpDir])),
@@ -201,6 +230,7 @@ pkg_clean_tmp_dir() ->
 %% Lists files currently included in erlpkg
 %% When run when not included in an erlpkg, we list files in the current directory relative to
 %% to this module.
+-spec pkg_ls() -> [file:filename_all() | file:name_all()].
 -ifdef(ERLPKG).
 pkg_ls() ->
     % Read our own data and extract the archive, open it
@@ -221,12 +251,14 @@ pkg_ls() ->
 -endif.
 
 %% Returns the current package name
+-spec pkg_name() -> file:name_all().
 pkg_name() ->
     filename:basename(pkg_rel_path()).
 
 %% Returns the current package location relative to current working directory
 %% escript:script_name() is undefined behaviour when called from outside an escript so
 %% we need to ifdef here to polyfill the behaviour for testing sake on the shell.
+-spec pkg_rel_path() -> file:filename_all().
 -ifdef(ERLPKG).
 pkg_rel_path() ->
     escript:script_name().
@@ -236,14 +268,17 @@ pkg_rel_path() ->
 -endif.
 
 %% Returns the current absolute package location
+-spec pkg_abs_path() -> file:filename_all().
 pkg_abs_path() ->
     filename:absname(pkg_rel_path()).
 
 %% Returns the directory containing current package
+-spec pkg_dir_path() -> file:filename_all().
 pkg_dir_path() ->
     filename:dirname(pkg_abs_path()).
 
 %% Returns binary data for escript
+-spec pkg_reflect() -> escript_archive().
 -ifdef(ERLPKG).
 pkg_reflect() ->
     {ok, [_, _, {emu_args, EmuArgs}, {archive, Archive}]} = escript:extract(pkg_rel_path(), []),
@@ -252,6 +287,8 @@ pkg_reflect() ->
 pkg_reflect() ->
     {{emu_args, ""}, {archive, <<>>}}.
 -endif.
+
+-spec pkg_reflect(emu_args | archive) -> emu_args() | pkg_archive().
 pkg_reflect(emu_args) ->
     {EmuArgs, _} = pkg_reflect(),
     EmuArgs;
@@ -260,6 +297,7 @@ pkg_reflect(archive) ->
     Archive.
 
 %% Opens the current erlpkg so that we can get data from it
+-spec pkg_open() -> zip:handle() | ok.
 -ifdef(ERLPKG).
 pkg_open() ->
     {ok, Handle} = zip:zip_open(pkg_reflect(archive), [memory]),
@@ -270,6 +308,7 @@ pkg_open() ->
 -endif.
 
 %% Closes the given handle to an erlpkg
+-spec pkg_close(zip:handle()) -> ok | {error, einval}.
 -ifdef(ERLPKG).
 pkg_close(Handle) ->
     zip:zip_close(Handle).
@@ -290,11 +329,13 @@ pkg_close(_Handle) ->
 %% Start eunit testing for this module
 %% Note that we dont do this asynchronously because some tests make or remove files,
 %% and clean up after themselves. This will cause most extraction tests to fail.
+-spec eunit() -> ok.
 eunit() ->
     eunit:test(?MODULE),
     init:stop().
 
 %% Create a test function so we can test an erlpkg version of this module
+-spec main([string() | atom()]) -> any().
 main([Function]) ->
     Fn = list_to_atom(Function),
     apply(?MODULE, Fn, []);

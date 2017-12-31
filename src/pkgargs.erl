@@ -13,7 +13,13 @@
     -export([
         get/2,
         parse/2,
-        create_help_string/3
+        create_help_string/3,
+
+        get_option/2,
+        get_option_names/2,
+        get_option_type/2,
+        get_option_desc/2,
+        get_option_default/2
     ]).
 -endif.
 
@@ -62,6 +68,10 @@
     parsed_args_list/0
 ]).
 
+
+
+
+
 %%% ---------------------------------------------------------------------------------------------%%%
 %%% - PUBLIC FUNCTIONS --------------------------------------------------------------------------%%%
 %%% ---------------------------------------------------------------------------------------------%%%
@@ -98,8 +108,6 @@
 %%       - Description is a string which is used for generated help messages only.
 %%
 -spec parse([string()], arg_defs()) -> parsed_args_list().
-parse([], OpDefs) ->
-    [];
 parse(Args, OpDefs) ->
     OpMap = create_name_id_mapping(OpDefs),
     DefaultArgs = create_arg_defaults(OpDefs, OpMap),
