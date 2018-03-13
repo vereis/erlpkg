@@ -216,7 +216,16 @@ pkg_tmp_dir() ->
 -spec pkg_clean_tmp_dir() -> ok | {error, _}.
 pkg_clean_tmp_dir() ->
     TmpDir = pkg_tmp_dir(),
-    os:cmd(lists:flatten(["rm -rf ", TmpDir])),
+
+    % Get the files in TmpDir, and sort by the number of /'s, which equates to how deeply nested
+    % each file is, as we need to delete these deepest first
+    TmpDirFiles = lists:sort(fun(A, B) ->
+        DepthA = length([X || X <- A, X =:= $/]),
+        DepthB = length([X || X <- B, X =:= $/]),
+        DepthA > DepthB
+    end, filelib:wildcard(lists:flatten([TmpDir, "/**"]))),
+
+    [ok = file:delete(File) || File <- TmpDirFiles],
     file:del_dir(pkg_tmp_dir()).
 
 
