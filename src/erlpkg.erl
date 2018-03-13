@@ -3,7 +3,7 @@
 -module(erlpkg).
 -author([{"Vereis", "Chris Bailey"}]).
 
--define(VERSION, "3.1.0").
+-define(VERSION, "3.2.0").
 
 -vsn(?VERSION).
 
@@ -34,7 +34,9 @@
     {["--no-utils"], o_no_pkg_utils, is_set, false, "Disable automatic inclusion of erlpkg pkg* modules to " ++
                                                     "packages built by erlpkg. If unset, all packages built " ++
                                                     "by erlpkg will include pkgargs and pkgutil modules for " ++
-                                                    "convenience."}
+                                                    "convenience."},
+
+    {["--gen-boilerplate"], o_boilerplate, is_set, false, "Bootstraps a new Erlang and Erlpkg project."}
 ]).
 
 -define(COND(Cond, A, B), [
@@ -84,6 +86,9 @@ main(Args) ->
     % Set NoAttachPkgs to true or false depending on whether or not it was specified in args
     AttachPkgs = pkgargs:get(o_no_pkg_utils, ParsedArgs) =:= false,
 
+    % Set Boilerplate to true or false depending on whether or not it was specified in args
+    Boilerplate = pkgargs:get(o_boilerplate, ParsedArgs),
+
     % Get a list of files from args to include in escript pkg
     Files = perform_wildcard_matches(pkgargs:get(default,  ParsedArgs)),
 
@@ -99,7 +104,7 @@ main(Args) ->
                     default_pkg_name(Files),
                     pkgargs:get(o_output, ParsedArgs)),
 
-    try branch(Files, Entrypoint, PkgName, ShowHelp, ShowVsn, AttachPkgs) of
+    try branch(Files, Entrypoint, PkgName, ShowHelp, ShowVsn, AttachPkgs, Boilerplate) of
         _ -> ok
     catch
         throw:usage ->
@@ -109,6 +114,8 @@ main(Args) ->
             help();
         throw:vsn ->
             version();
+        throw:boilerplate ->
+            boilerplate();
         throw:{bad_filename, File} ->
             io:format("~s: Error - ~s is not a valid filename or could not be found.~nAborting build.~n~n",
                       [pkgutils:pkg_name(), File]);
@@ -134,20 +141,22 @@ main(Args) ->
 %%% ---------------------------------------------------------------------------------------------%%%
 
 %% Determines which function to run depending on arguments given.
--spec branch([file:filename_all(), ...], module_name(), pkg_name(), false, false, boolean()) -> ok;
-            ([file:filename_all()], module_name(), pkg_name(), true, true, boolean())    -> no_return();
-            ([file:filename_all()], module_name(), pkg_name(), false, true, boolean())   -> no_return();
-            ([file:filename_all()], module_name(), pkg_name(), true, false, boolean())   -> no_return().
+-spec branch([file:filename_all(), ...], module_name(), pkg_name(), false, false, boolean(), boolean()) -> ok;
+            ([file:filename_all()], module_name(), pkg_name(), true, true, boolean(), boolean())    -> no_return();
+            ([file:filename_all()], module_name(), pkg_name(), false, true, boolean(), boolean())   -> no_return();
+            ([file:filename_all()], module_name(), pkg_name(), true, false, boolean(), boolean())   -> no_return().
 branch(Files, Entrypoint, PkgName,
-       _ShowHelp = false, _ShowVsn = false, AttachPkgs) when length(Files) > 0 ->
+       _ShowHelp = false, _ShowVsn = false, AttachPkgs, _Boilerplate = false) when length(Files) > 0 ->
     build(Files, Entrypoint, PkgName, AttachPkgs);
-branch(_, _, _, _ShowHelp = false, _ShowVsn = false, _) ->
+branch(_, _, _, _ShowHelp = false, _ShowVsn = false, _, _Boilerplate = false) ->
     throw(usage);
-branch(_, _, _, _ShowHelp = true, _ShowVsn = false, _) ->
+branch(_, _, _, _ShowHelp = true, _ShowVsn = false, _, _Boilerplate = false) ->
     throw(help);
-branch(_, _, _, _ShowHelp = false, _ShowVsn = true, _) ->
+branch(_, _, _, _ShowHelp = false, _ShowVsn = true, _, _Boilerplate = false) ->
     throw(vsn);
-branch(_, _, _, _, _, _) ->
+branch(_, _, _, _ShowHelp = false, _ShowVsn = false, _, _Boilerplate = true) ->
+    throw(boilerplate);
+branch(_, _, _, _, _, _, _) ->
     throw(unknown).
 
 
@@ -218,7 +227,10 @@ build_file(Filename) when is_list(Filename) ->
                 true ->
                     build_file(dir, Filename);
                 _ ->
-                    [$. | Type] = filename:extension(Filename),
+                    case filename:extension(Filename) of
+                        [$. | T]    -> Type = T;
+                        _           -> Type = "other"
+                    end,
                     build_file(list_to_atom(Type), Filename)
             end;
         _ ->
@@ -268,6 +280,90 @@ build_file(_, Filename) ->
     {filename:basename(Filename), Data}.
 
 
+
+
+
+%%% ---------------------------------------------------------------------------------------------%%%
+%%% - BOILERPLATE GEN ---------------------------------------------------------------------------%%%
+%%% ---------------------------------------------------------------------------------------------%%%
+%% Gitignore content macro
+-define(GITIGNORE,
+string:join([
+"### ERLANG STUFF ###",
+".eunit",
+"deps",
+"*.o",
+"*.beam",
+"*.plt",
+"erl_crash.dump",
+".concrete/DEV_MODE",
+".rebar",
+".log",
+"### END OF ERLANG STUFF ###",
+"### ERLPKG STUFF ###",
+"ebin/*",
+"edebug/*",
+"etesting/*",
+"### END OF ERLPKG STUFF ###"],
+"\n")
+).
+
+%% Creates a directory containing optional git information, including erlpkg and creating a simple
+%% hello_world application.
+-spec boilerplate() -> no_return().
+boilerplate() ->
+    % Make directory to contain everything
+    ProjectName = get_input("==> Name of Project? (Used for directory containing project)\n    "),
+    file:make_dir(ProjectName),
+    io:format("    ok.~n"),
+
+    % Check if user is using git, and if so do a git init
+    case get_input("==> Initialise with Git? (y/n)\n    ") of
+        "y"  -> io:format("    ok.~n"),
+                io:format("==> Setting up .git in ./~s/~n    ok.~n", [ProjectName]),
+                os:cmd(lists:flatten(["git init ", ProjectName])),
+                io:format("==> Creating .gitignore in ./~s/~n    ok.~n", [ProjectName]),
+                file:write_file(lists:flatten([ProjectName, "/.gitignore"]), ?GITIGNORE);
+        _    -> io:format("    ok.~n")
+    end,
+
+    % Make standard directories
+    io:format("==> Creating standard directories~n"),
+    Srcdir = ProjectName ++ "/src",
+    Utildir = ProjectName ++ "/util",
+    file:make_dir(Srcdir),
+    file:make_dir(Utildir),
+    io:format("    ok.~n"),
+
+    % Extract 'Hello world' example to newly created project src dir
+    io:format("==> Writing example module and eunit test in ./~s/~s/~n", [ProjectName, "src"]),
+    pkgutils:pkg_extract_file("hello.src", Srcdir),
+    pkgutils:pkg_extract_file("hello_tests.src", Srcdir),
+    file:rename(lists:flatten(Srcdir, "/hello.src"), Srcdir ++ "/hello.erl"),
+    file:rename(lists:flatten(Srcdir, "/hello_tests.src"), Srcdir ++ "/hello_tests.erl"),
+    io:format("    ok.~n"),
+
+    % Extract Elvis and Elvis.config to newly created project util dir
+    io:format("==> Configuring 'Elvis' (Linter)~n"),
+    pkgutils:pkg_extract_file("elvis", Utildir),
+    pkgutils:pkg_extract_file("elvis.config", Utildir),
+    io:format("    ok.~n"),
+
+    % Copy a copy of erlpkg into utildir
+    io:format("==> Configuring 'Erlpkg'~n"),
+    file:copy(pkgutils:pkg_abs_path(), Utildir ++ "/" ++ pkgutils:pkg_name()),
+    io:format("    ok.~n"),
+
+    % Extract makefile
+    io:format("==> Creating makefile~n"),
+    pkgutils:pkg_extract_file("makefile", ProjectName),
+    io:format("    ok.~n"),
+
+    io:format("Project '~s' successfully built in ./~s/~n~n", [ProjectName, ProjectName]).
+
+-spec get_input(string()) -> string().
+get_input(Prompt) ->
+    [Char || Char <- io:get_line(Prompt), Char =/= $\n].
 
 
 %%% ---------------------------------------------------------------------------------------------%%%

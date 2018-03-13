@@ -1,0 +1,155 @@
+%%% Module Description:
+%%% Builds an escript package out of a list of given Erlang packages
+-module(hello).
+-author([{"GITHUB_USER", "YOUR_NAME"}]).
+
+-define(VERSION, "0.0.1").
+
+-vsn(?VERSION).
+
+%% Export all functions if test build
+-ifdef(TEST).
+    -compile(export_all).
+-else.
+    -export([
+        main/0,
+        main/1
+    ]).
+-endif.
+
+-define(DEFAULT_ARGS, [
+    {["-o", "--output"], o_output, singleton, "world!", "This is what gets printed following 'hello, '"},
+
+    {["-h", "--help"], o_help, is_set, false, "Displays this help message and exits."},
+
+    {["-v", "--version"], o_vsn, is_set, false, "Displays current build version."}
+]).
+
+
+
+
+
+%%% ---------------------------------------------------------------------------------------------%%%
+%%% - TYPE DEFINITIONS --------------------------------------------------------------------------%%%
+%%% ---------------------------------------------------------------------------------------------%%%
+
+-type input_args() :: [atom() | string()].
+
+
+
+
+
+%%% ---------------------------------------------------------------------------------------------%%%
+%%% - PUBLIC FUNCTIONS --------------------------------------------------------------------------%%%
+%%% ---------------------------------------------------------------------------------------------%%%
+
+%% Entrypoint into this module
+-spec main() -> ok.
+main() ->
+    main(init:get_plain_arguments()).
+
+-spec main(input_args()) -> ok.
+main(Args) ->
+    % Normalize args to strings if they're atoms.
+    NArgs = [case is_atom(Arg) of true -> atom_to_list(Arg); false -> Arg end || Arg <- Args],
+
+    % Parse Normalized args
+    ParsedArgs = pkgargs:parse(NArgs, ?DEFAULT_ARGS),
+
+    % Set ShowHelp to true or false depending on whether or not it was specified in args
+    Output = pkgargs:get(o_output, ParsedArgs),
+
+    % Set ShowVsn to true or false depending on whether or not it was specified in args
+    ShowVsn = pkgargs:get(o_vsn, ParsedArgs),
+
+    % Set ShowHelp to true or false depending on whether or not it was specified in args
+    ShowHelp = pkgargs:get(o_help, ParsedArgs),
+
+    % Look for any command line options which aren't flagged with anything
+    OtherArgs = pkgargs:get(default,  ParsedArgs),
+
+    try branch(Output, ShowVsn, ShowHelp, OtherArgs) of
+        _ -> ok
+    catch
+        throw:ok ->
+            io:format("Hello, ~s~n", [Output]);
+        throw:usage ->
+            usage(),
+            help();
+        throw:help ->
+            help();
+        throw:vsn ->
+            version();
+        E ->
+            SelfName = pkgutils:pkg_name(),
+            io:format("~s: Unknown Error - ~s~n", [SelfName, E]),
+            usage(),
+            io:format("Try '~s --help' for more information.", [SelfName])
+    end,
+
+    % Clean up and stop
+    init:stop().
+
+%% Determines which function to run depending on arguments given.
+-spec branch(string(), false, false,  _) -> no_return;
+            (_,        true,  false,  _) -> no_return;
+            (_,        false, true,   _) -> no_return;
+            (_,        false,  false, _) -> no_return.
+branch(_Output, false, false, []) when length(_Output) > 0 ->
+    throw(ok);
+branch(_, false, false, _Args) when length(_Args) > 0 ->
+    throw(usage);
+branch(_, false, true, []) ->
+    throw(help);
+branch(_, true, false, []) ->
+    throw(vsn);
+branch(_, _, _, _) ->
+    throw(unknown).
+
+
+
+
+
+%%% ---------------------------------------------------------------------------------------------%%%
+%%% - MISC FUNCTIONS ----------------------------------------------------------------------------%%%
+%%% ---------------------------------------------------------------------------------------------%%%
+
+%% Displays usage information
+-spec usage() -> no_return().
+usage() ->
+    SelfName = pkgutils:pkg_name(),
+    io:format("Usage: ~s [-o <name>] ~n" ++
+              "Says either 'hello, world!' or 'hello, $arg' where $arg is what is passed into -o.~n" ++
+              "Example: ~s -o Jimmy~n~n",
+              [SelfName,
+               SelfName]).
+
+%% Displays help information
+-spec help() -> no_return().
+help() ->
+    io:format("Configuration Parameters:~n" ++
+              "~s~n",
+              [pkgargs:create_help_string(?DEFAULT_ARGS, 1, 55)]).
+
+%% Displays version information
+-spec version() -> no_return().
+version() ->
+    io:format("Current ~s version: v~s~n~n",
+              [pkgutils:pkg_name(),
+              ?VERSION]).
+
+
+
+
+
+%%% ---------------------------------------------------------------------------------------------%%%
+%%% - META FUNCTIONS ----------------------------------------------------------------------------%%%
+%%% ---------------------------------------------------------------------------------------------%%%
+
+-ifdef(TEST).
+%% Start eunit testing for this module
+-spec eunit() -> ok.
+eunit() ->
+    eunit:test({inparallel, ?MODULE}),
+    init:stop().
+-endif.

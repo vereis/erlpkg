@@ -133,22 +133,8 @@ define package
 	@ $(eval COLOR = $(2))
 
 	@ echo "$(COLOR)==> Creating erlpkg package in './$(OUTPUT_DIR)/'$(NORMAL)"
-	@ cp $(SRCDIR)/*.erl $(OUTPUT_DIR)/
-	@ cp $(UTILDIR)/elvis $(OUTPUT_DIR)/
-	@ cp $(SRCDIR)/boilerplate/* $(OUTPUT_DIR)/
-	@ cd $(OUTPUT_DIR) && ($(ERL) -pa $(OUTPUT_DIR) -noinput -noshell -s erlpkg main erlpkg.erl pkgargs.erl pkgutils.erl hello.src hello_tests.src elvis elvis.config makefile) && cd ..
-	@ mv $(OUTPUT_DIR)/erlpkg.erlpkg $(OUTPUT_DIR)/erlpkg
-	@ chmod +x $(OUTPUT_DIR)/erlpkg
-	@ echo "$(NORMAL)    Done"
-
-	@ echo "$(COLOR)==> Cleaning directory './$(OUTPUT_DIR)/'$(NORMAL)"
+	@ $(UTILDIR)/erlpkg $(OUTPUT_DIR)/*.beam -o $(OUTPUT_DIR)/hello.o
 	@ rm $(OUTPUT_DIR)/*.beam
-	@ rm $(OUTPUT_DIR)/*.erl
-	@ rm $(OUTPUT_DIR)/*.src
-	@ rm $(OUTPUT_DIR)/makefile
-	@ rm $(OUTPUT_DIR)/elvis
-	@ rm $(OUTPUT_DIR)/elvis.config
-	@ echo "    Done\n"
 
 	@ echo "$(COLOR)==> Packaging complete in: './$(OUTPUT_DIR)/'$(NORMAL)"
 	@ echo "    Done\n"
@@ -168,14 +154,8 @@ define eunit
 	@ $(eval TARGET_DIR = $(1))
 	@ $(eval COLOR = $(2))
 	@ echo "$(COLOR)==> Running EUnit Tests$(NORMAL)"
-	@ echo "  Running tests for module: erlpkg"
-	@ cd $(TARGET_DIR) && $(ERL) -pa $(TARGET_DIR) -noinput -noshell -s erlpkg eunit
-
-	@ echo "  Running tests for module: pkgargs"
-	@ cd $(TARGET_DIR) && $(ERL) -pa $(TARGET_DIR) -noinput -noshell -s pkgargs eunit
-
-	@ echo "  Running tests for module: pkgutils"
-	@ cd $(TARGET_DIR) && $(ERL) -pa $(TARGET_DIR) -noinput -noshell -s pkgutils eunit
+	@ echo "  Running tests for module: hello"
+	@ cd $(TARGET_DIR) && $(ERL) -pa $(TARGET_DIR) -noinput -noshell -s hello eunit
 
 	@ echo "$(COLOR)==> EUnit Tests complete in './$(TARGET_DIR)/'$(NORMAL)"
 	@ echo "    Done\n"

@@ -1,0 +1,23 @@
+%%% Module Description:
+%%% Test module for 'hello'
+-module(hello_tests).
+-author([{"GITHUB_USER", "YOUR_NAME"}]).
+
+-define(VERSION, "0.0.1").
+
+-vsn(?VERSION).
+
+%% Include testing framework
+-include_lib("eunit/include/eunit.hrl").
+
+-compile(export_all).
+
+%% Tell dialyzer to shut up about test generator things never matching.
+-dialyzer(no_match).
+
+%%% ---------------------------------------------------------------------------------------------%%%
+%%% - TEST CASES --------------------------------------------------------------------------------%%%
+%%% ---------------------------------------------------------------------------------------------%%%
+
+%%% There are no test cases here, but you should just put normal
+%%% eunit tests here :)
