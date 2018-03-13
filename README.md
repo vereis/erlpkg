@@ -36,6 +36,12 @@ An example of this usage might be:
 ./erlpkg fibonnaci.erl math.erl other_thing.beam main.erl -e main -o my_erl_pkg
 ```
 
+Another nice thing ```erlpkg``` can do is generate project boilerplate for you, simply run
+```shell
+./erlpkg --gen-boilerplate
+```
+and follow the instructions provided.
+
 ### Advanced Use Cases
 By default, ```erlpkg``` will automatically attach the modules ```pkgargs``` and ```pkgutils``` into anything it builds. This is to allow us to perform basic escript argument parsing in a nice way, generate ```--help``` messages automatically and poke at the contents of the escript if we need to.
 
