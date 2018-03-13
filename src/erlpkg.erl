@@ -237,10 +237,20 @@ build_file(erl, Filename) ->
 
 %% Reads a given directory
 build_file(dir, Filename) ->
+    % If the filename to include is something like a/b/c, we only want to include the directory c,
+    % not the directories a/b. To do this we need to cd into the dirname(c) and after building,
+    % cd back into the cwd
+    {ok, Cwd} = file:get_cwd(),
+    file:set_cwd(filename:dirname(Filename)),
+
     io:format("==> Including directory: ~s~n", [Filename]),
     io:format("~4cCompressing and zipping directory in memory....~n", [$ ]),
-    {ok, {_, Zip}} = zip:create(filename:basename(Filename) ++ ".zip", [Filename], [memory, {compress, all}]),
+    {ok, {_, Zip}} = zip:create(filename:basename(Filename) ++ ".zip",
+                                [filename:basename(Filename)],
+                                [memory, {compress, all}]),
     io:format("~4cok.~n", [$ ]),
+
+    file:set_cwd(Cwd),
     {filename:basename(Filename) ++ ".zip", Zip};
 
 %% Reads a given beam file and attaches its binary data so we can add it to an escript package
