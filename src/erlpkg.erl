@@ -246,7 +246,7 @@ build_file(erl, Filename) ->
     io:format("~4cCompiling Erlang source file in memory....~n", [$ ]),
     {ok, ModuleName, CompiledFile} = compile:file(Filename, [binary, {d, 'ERLPKG'}]),
     io:format("~4cok.~n", [$ ]),
-    {atom_to_list(ModuleName) ++ ".beam", CompiledFile};
+    [{atom_to_list(ModuleName) ++ ".beam", CompiledFile}];
 
 %% Reads a given directory
 build_file(dir, Filename) ->
@@ -275,14 +275,14 @@ build_file(beam, Filename) ->
     io:format("==> Including Erlang bytecode file: ~s~n", [Filename]),
     {ok, Data} = file:read_file(Filename),
     io:format("~4cok.~n", [$ ]),
-    {filename:basename(Filename), Data};
+    [{filename:basename(Filename), Data}];
 
 %% Blindly reads a given file for its binary data so we can add it to an escript package
 build_file(_, Filename) ->
     io:format("==> Including unknown type file: ~s~n", [Filename]),
     {ok, Data} = file:read_file(Filename),
     io:format("~4cok.~n", [$ ]),
-    {filename:basename(Filename), Data}.
+    [{filename:basename(Filename), Data}].
 
 
 
