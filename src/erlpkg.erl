@@ -3,7 +3,7 @@
 -module(erlpkg).
 -author([{"Vereis", "Chris Bailey"}]).
 
--define(VERSION, "3.2.0").
+-define(VERSION, "4.0.0").
 
 -vsn(?VERSION).
 
@@ -51,10 +51,11 @@
 %%% - TYPE DEFINITIONS --------------------------------------------------------------------------%%%
 %%% ---------------------------------------------------------------------------------------------%%%
 
--type input_args() :: [atom() | string()].
+-type input_args()  :: [atom() | string()].
 -type module_name() :: file:name_all().
--type pkg_name() :: file:name_all().
--type pkg_content() :: {string(), binary()}.
+-type pkg_name()    :: file:name_all().
+-type pkg_content() :: {string(), binary()}
+                     | [{string(), binary()}].
 
 
 
@@ -191,7 +192,7 @@ build(Files, Entrypoint, PkgName, AttachPkgs) ->
 
     % Generate data we need to put into escript
     PkgHeader = build_header(Entrypoint),
-    PkgContents = [build_file(File) || File <- PkgFiles],
+    PkgContents = lists:flatten([build_file(File) || File <- PkgFiles]),
 
     {ok, {_, Zip}} = zip:create(PkgName, PkgContents, [memory, {compress, all}]),
     Pkg = iolist_to_binary([PkgHeader, Zip]),
@@ -256,14 +257,18 @@ build_file(dir, Filename) ->
     file:set_cwd(filename:dirname(Filename)),
 
     io:format("==> Including directory: ~s~n", [Filename]),
-    io:format("~4cCompressing and zipping directory in memory....~n", [$ ]),
+    io:format("~4cProcessing files in directory....~n", [$ ]),
+
+    %% It's easier to read all the files in a directory by zipping it, then unzipping it.
     {ok, {_, Zip}} = zip:create(filename:basename(Filename) ++ ".zip",
                                 [filename:basename(Filename)],
                                 [memory, {compress, all}]),
+    {ok, DirFiles} = zip:unzip(Zip, [memory]),
+    [io:format("~4c- Including file ~s~n", [$ , DirFileName]) || {DirFileName, _} <- DirFiles],
     io:format("~4cok.~n", [$ ]),
 
     file:set_cwd(Cwd),
-    {filename:basename(Filename) ++ ".zip", Zip};
+    DirFiles;
 
 %% Reads a given beam file and attaches its binary data so we can add it to an escript package
 build_file(beam, Filename) ->
