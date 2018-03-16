@@ -75,35 +75,22 @@ main(Args) ->
     % Normalize args to strings if they're atoms.
     NArgs = [case is_atom(Arg) of true -> atom_to_list(Arg); false -> Arg end || Arg <- Args],
 
-    % Parse Normalized args
-    ParsedArgs = pkgargs:parse(NArgs, ?DEFAULT_ARGS),
+    % Parse args
+    ok = pkgargs:parse('$args', NArgs, ?DEFAULT_ARGS),
 
-    % Set ShowHelp to true or false depending on whether or not it was specified in args
-    ShowHelp = pkgargs:get(o_help, ParsedArgs),
+    % Get Parsed args
+    [ShowHelp, ShowVsn, AttachPkgs, Boilerplate] = pkgargs:get([o_help, o_vsn, o_no_pkg_utils, o_boilerplate],
+                                                               '$args'),
 
-    % Set ShowVsn to true or false depending on whether or not it was specified in args
-    ShowVsn = pkgargs:get(o_vsn, ParsedArgs),
+    Files = perform_wildcard_matches(pkgargs:get(default, '$args')),
 
-    % Set NoAttachPkgs to true or false depending on whether or not it was specified in args
-    AttachPkgs = pkgargs:get(o_no_pkg_utils, ParsedArgs) =:= false,
-
-    % Set Boilerplate to true or false depending on whether or not it was specified in args
-    Boilerplate = pkgargs:get(o_boilerplate, ParsedArgs),
-
-    % Get a list of files from args to include in escript pkg
-    Files = perform_wildcard_matches(pkgargs:get(default,  ParsedArgs)),
-
-    % Set entrypoint to either a specified entrypoint if set in args, or
-    % to the default value for it
-    Entrypoint = ?COND(pkgargs:get(o_entry, ParsedArgs) =:= default,
+    Entrypoint = ?COND(pkgargs:get(o_entry, '$args') =:= default,
                        default_entrypoint(Files),
-                       pkgargs:get(o_entry, ParsedArgs)),
+                       pkgargs:get(o_entry, '$args')),
 
-    % Set pkg_name to either a specified pkg_name if set in args, or
-    % to the default value for it
-    PkgName = ?COND(pkgargs:get(o_output, ParsedArgs) =:= default,
+    PkgName = ?COND(pkgargs:get(o_output, '$args') =:= default,
                     default_pkg_name(Files),
-                    pkgargs:get(o_output, ParsedArgs)),
+                    pkgargs:get(o_output, '$args')),
 
     try branch(Files, Entrypoint, PkgName, ShowHelp, ShowVsn, AttachPkgs, Boilerplate) of
         _ -> ok

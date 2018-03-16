@@ -2,7 +2,7 @@
 %%% Parses escript package arguments
 -module(pkgargs).
 -author([{"Vereis", "Chris Bailey"}]).
--define(VERSION, "2.0.1").
+-define(VERSION, "2.1.0").
 
 -vsn(?VERSION).
 
@@ -13,6 +13,7 @@
     -export([
         get/2,
         parse/2,
+        parse/3,
         create_help_string/3,
 
         get_option/2,
@@ -113,15 +114,52 @@ parse(Args, OpDefs) ->
     DefaultArgs = create_arg_defaults(OpDefs, OpMap),
     maps:to_list(parse_args(Args, DefaultArgs, OpMap, OpDefs)).
 
-%% Gets the value for an entry of a parsed argument
--spec get(arg_id(), parsed_args_map()) -> any();
-         (arg_id(), parsed_args_list()) -> any().
-get(Key, ParsedArgs) when is_list(ParsedArgs) ->
-    {_Key, Value} = lists:keyfind(Key, 1, ParsedArgs),
-    Value;
-get(Key, ParsedArgs) when is_map(ParsedArgs) ->
-    maps:get(Key, ParsedArgs).
+%% Registers a process to Name which acts as a 'global variable' allowing us to avoid
+%% passing arguments down, and instead enabling us to simply ask for what arguments
+%% are set.
+-spec parse(atom(), [string()], arg_defs()) -> atom() | {err, atom_already_registered}.
+parse(Name, Args, OpDefs) ->
+    case lists:member(Name, registered()) of
+        true ->
+            {err, atom_already_registered};
+        _    ->
+            register(Name, spawn(fun() -> query_processor(parse(Args, OpDefs)) end)),
+            ok
+    end.
 
+%% Gets the value for an entry of a parsed argument
+-spec get(arg_id() | [arg_id()], parsed_args_map())  -> any();
+         (arg_id() | [arg_id()], parsed_args_list()) -> any();
+         (arg_id() | [arg_id()], atom() | pid())     -> any().
+get(Key, ParsedArgs) when is_list(ParsedArgs) ->
+    case is_list(Key) of
+        true ->
+            [get(K, ParsedArgs) || K <- Key];
+        _ ->
+            {_Key, Value} = lists:keyfind(Key, 1, ParsedArgs),
+            Value
+    end;
+get(Key, ParsedArgs) when is_map(ParsedArgs) ->
+    case is_list(Key) of
+        true ->
+            [get(K, ParsedArgs) || K <- Key];
+        _ ->
+            maps:get(Key, ParsedArgs)
+    end;
+
+%% Gets the value for an arg parsed by parse/3
+get(Key, QueryProcessor) when is_atom(QueryProcessor) ; is_pid(QueryProcessor) ->
+    case lists:member(QueryProcessor, registered()) of
+        false ->
+            {err, atom_not_registered};
+        _    ->
+            QueryProcessor ! {self(), Key},
+            receive
+                {pkgargs, Key, Value} ->
+                    Value
+            end,
+            Value
+    end.
 
 
 
@@ -215,6 +253,17 @@ parse_args(Args, ArgsBuffer, OpMap, OpDef, {PrevTokId, N}) when is_integer(N)->
 %%% ---------------------------------------------------------------------------------------------%%%
 %%% - UTILITY FUNCTIONS -------------------------------------------------------------------------%%%
 %%% ---------------------------------------------------------------------------------------------%%%
+
+%% A process which responds to queries about whether or not args were set.
+-spec query_processor(parsed_args_list()) -> any().
+query_processor(ParsedArgs) ->
+    receive
+        {Sender, Arg} when is_atom(Arg) ; is_list(Arg) ->
+            Sender ! {pkgargs, Arg, get(Arg, ParsedArgs)},
+            query_processor(ParsedArgs);
+        stop ->
+            ok
+    end.
 
 %% Returns a map which maps option_names to option_ids for easy lookup.
 %% Note:
