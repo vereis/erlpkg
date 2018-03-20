@@ -252,11 +252,11 @@ parse_args(Args, ArgsBuffer, OpMap, OpDef, {PrevTokId, N}) when is_integer(N)->
 query_processor(ParsedArgs) ->
     receive
         {Sender, Arg} when is_atom(Arg) ; is_list(Arg) ->
-            Sender ! {?Q, Arg, get(Arg, ParsedArgs)},
-            query_processor(ParsedArgs);
+            Sender ! {?Q, Arg, get(Arg, ParsedArgs)};
         stop ->
             ok
-    end.
+    end,
+    query_processor(ParsedArgs).
 
 %% Returns a map which maps option_names to option_ids for easy lookup.
 %% Note:
