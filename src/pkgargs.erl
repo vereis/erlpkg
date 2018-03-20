@@ -2,7 +2,7 @@
 %%% Parses escript package arguments
 -module(pkgargs).
 -author([{"Vereis", "Chris Bailey"}]).
--define(VERSION, "2.1.0").
+-define(VERSION, "3.0.0").
 
 -vsn(?VERSION).
 
@@ -11,9 +11,9 @@
     -compile(export_all).
 -else.
     -export([
+        get/1,
         get/2,
         parse/2,
-        parse/3,
         create_help_string/3,
 
         get_option/2,
@@ -23,6 +23,9 @@
         get_option_default/2
     ]).
 -endif.
+
+%% Process name for our parsed_arg process
+-define(Q, parsed_arg_agent__).
 
 %% Any arguments not matching a specified option_definition are returned as
 %% a list keyed by the value of this macro.
@@ -112,50 +115,40 @@
 parse(Args, OpDefs) ->
     OpMap = create_name_id_mapping(OpDefs),
     DefaultArgs = create_arg_defaults(OpDefs, OpMap),
-    maps:to_list(parse_args(Args, DefaultArgs, OpMap, OpDefs)).
+    ParsedArgs  = maps:to_list(parse_args(Args, DefaultArgs, OpMap, OpDefs)),
 
-%% Registers a process to Name which acts as a 'global variable' allowing us to avoid
-%% passing arguments down, and instead enabling us to simply ask for what arguments
-%% are set.
--spec parse(atom(), [string()], arg_defs()) -> atom() | {err, atom_already_registered}.
-parse(Name, Args, OpDefs) ->
-    case lists:member(Name, registered()) of
-        true ->
-            {err, atom_already_registered};
-        _    ->
-            register(Name, spawn(fun() -> query_processor(parse(Args, OpDefs)) end)),
-            ok
-    end.
+    %% Spawn an agent for querying ParsedArgs
+    register(?Q, spawn(fun() -> query_processor(ParsedArgs) end)),
+
+    %% Return ParsedArgs anyway, in case user wants to manually traverse it
+    ParsedArgs.
 
 %% Gets the value for an entry of a parsed argument
 -spec get(arg_id() | [arg_id()], parsed_args_map())  -> any();
-         (arg_id() | [arg_id()], parsed_args_list()) -> any();
-         (arg_id() | [arg_id()], atom() | pid())     -> any().
+         (arg_id() | [arg_id()], parsed_args_list()) -> any().
 get(Key, ParsedArgs) when is_list(ParsedArgs) ->
-    case is_list(Key) of
-        true ->
-            [get(K, ParsedArgs) || K <- Key];
-        _ ->
-            {_Key, Value} = lists:keyfind(Key, 1, ParsedArgs),
-            Value
-    end;
+    get(Key, maps:from_list(ParsedArgs));
 get(Key, ParsedArgs) when is_map(ParsedArgs) ->
     case is_list(Key) of
         true ->
             [get(K, ParsedArgs) || K <- Key];
         _ ->
-            maps:get(Key, ParsedArgs)
-    end;
+            case maps:is_key(Key, ParsedArgs) of
+                true -> maps:get(Key, ParsedArgs);
+                _    -> {err, requested_key_not_found}
+            end
+    end.
 
-%% Gets the value for an arg parsed by parse/3
-get(Key, QueryProcessor) when is_atom(QueryProcessor) ; is_pid(QueryProcessor) ->
-    case lists:member(QueryProcessor, registered()) of
+%% Queries the parsed_args agent for whatever is stored in a given key
+-spec get(arg_id() | [arg_id()]) -> any().
+get(Key) ->
+    case lists:member(?Q, registered()) of
         false ->
-            {err, atom_not_registered};
+            {err, parse_agent_not_found};
         _    ->
-            QueryProcessor ! {self(), Key},
+            ?Q ! {self(), Key},
             receive
-                {pkgargs, Key, Value} ->
+                {?Q, Key, Value} ->
                     Value
             end,
             Value
@@ -259,7 +252,7 @@ parse_args(Args, ArgsBuffer, OpMap, OpDef, {PrevTokId, N}) when is_integer(N)->
 query_processor(ParsedArgs) ->
     receive
         {Sender, Arg} when is_atom(Arg) ; is_list(Arg) ->
-            Sender ! {pkgargs, Arg, get(Arg, ParsedArgs)},
+            Sender ! {?Q, Arg, get(Arg, ParsedArgs)},
             query_processor(ParsedArgs);
         stop ->
             ok

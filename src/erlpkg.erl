@@ -3,7 +3,7 @@
 -module(erlpkg).
 -author([{"Vereis", "Chris Bailey"}]).
 
--define(VERSION, "4.0.0").
+-define(VERSION, "4.1.0").
 
 -vsn(?VERSION).
 
@@ -76,21 +76,20 @@ main(Args) ->
     NArgs = [case is_atom(Arg) of true -> atom_to_list(Arg); false -> Arg end || Arg <- Args],
 
     % Parse args
-    ok = pkgargs:parse('$args', NArgs, ?DEFAULT_ARGS),
+    pkgargs:parse(NArgs, ?DEFAULT_ARGS),
 
     % Get Parsed args
-    [ShowHelp, ShowVsn, AttachPkgs, Boilerplate] = pkgargs:get([o_help, o_vsn, o_no_pkg_utils, o_boilerplate],
-                                                               '$args'),
+    [ShowHelp, ShowVsn, AttachPkgs, Boilerplate] = pkgargs:get([o_help, o_vsn, o_no_pkg_utils, o_boilerplate]),
 
-    Files = perform_wildcard_matches(pkgargs:get(default, '$args')),
+    Files = perform_wildcard_matches(pkgargs:get(default)),
 
-    Entrypoint = ?COND(pkgargs:get(o_entry, '$args') =:= default,
+    Entrypoint = ?COND(pkgargs:get(o_entry) =:= default,
                        default_entrypoint(Files),
-                       pkgargs:get(o_entry, '$args')),
+                       pkgargs:get(o_entry)),
 
-    PkgName = ?COND(pkgargs:get(o_output, '$args') =:= default,
+    PkgName = ?COND(pkgargs:get(o_output) =:= default,
                     default_pkg_name(Files),
-                    pkgargs:get(o_output, '$args')),
+                    pkgargs:get(o_output)),
 
     try branch(Files, Entrypoint, PkgName, ShowHelp, ShowVsn, AttachPkgs, Boilerplate) of
         _ -> ok
