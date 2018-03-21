@@ -24,8 +24,6 @@
         pkg_extract_file/2,
         pkg_extract_dir/1,
         pkg_extract_dir/2,
-        pkg_extract_zip/1,
-        pkg_extract_zip/2,
         pkg_ls/0,
         pkg_name/0,
         pkg_rel_path/0,
@@ -67,12 +65,11 @@
 %%% ---------------------------------------------------------------------------------------------%%%
 
 %% Determines whether or not this is being run from an erlpkg
+-spec pkg_is_erlpkg() -> boolean().
 -ifdef(ERLPKG).
--spec pkg_is_erlpkg() -> true.
 pkg_is_erlpkg() ->
     true.
 -else.
--spec pkg_is_erlpkg() -> false.
 pkg_is_erlpkg() ->
     false.
 -endif.
@@ -165,43 +162,60 @@ pkg_extract_file(FileName, ExtractPath) ->
     OutName.
 -endif.
 
-%% Directories in erlpkgs are zipped and thus, when extracting a directory from an erlpkg we need
-%% to perform extra extraction steps. If no ExtractPath is given we extract to /tmp/pkg_name()/
--spec pkg_extract_dir(file:filename_all()) -> ok | {error, einval}.
--spec pkg_extract_zip(file:filename_all()) -> ok | {error, einval}.
--spec pkg_extract_dir(file:filename_all(), file:name_all()) -> ok | {error, einval}.
+%% Extracts an enture directory which is included in erlpkg. If no argument for ExtractPath is given
+%% we automatically extract to /tmp/pkg_name()/
+-spec pkg_extract_dir(file:filename_all()) -> file:filename_all()
+                                            | {err, directory_not_found}.
+-spec pkg_extract_dir(file:filename_all(), file:name_all()) -> file:filename_all()
+                                                             | {err, directory_not_found}.
 pkg_extract_dir(FileName) ->
-    pkg_extract_zip(FileName).
-
-pkg_extract_dir(FileName, ExtractPath) ->
-    pkg_extract_zip(FileName, ExtractPath).
-
-pkg_extract_zip(FileName) ->
-    pkg_extract_zip(FileName, pkg_tmp_dir()).
+    pkg_extract_dir(FileName, pkg_tmp_dir()).
 
 -ifdef(ERLPKG).
-pkg_extract_zip(FileName, ExtractPath) ->
-    % Ensure ExtractPath exists before proceeding
+pkg_extract_dir(FileName, ExtractPath) ->
     ok = filelib:ensure_dir(ExtractPath),
 
-    % Open our erlpkg, making sure we deal with all the extracted stuff in memory so that we can
-    % read the data we need and extract as needed
-    Self = pkg_open(),
+    % We need a regex to match files to simulate globbing on files
+    Files = pkg_ls(),
+    {ok, Re} = re:compile("^" ++ FileName ++ "/?.*[^/]$"),
+    ToExtract = [File || File <- Files, re:run(File, Re) =/= nomatch],
 
-    try zip:zip_get(FileName, Self) of
-        {ok, {_, DirZipBinary}} ->
-            % Extract dir zip to specified directory
-            {ok, _} = zip:extract(DirZipBinary, [{cwd, lists:flatten(ExtractPath)}])
-    catch
+    % If nothing was found to be extracted, just ensure the directory,
+    % otherwise, perform extraction.
+    case length(ToExtract) of
+        0 ->
+            case lists:member(FileName, Files) of
+                true ->
+                    OutName = lists:flatten([ExtractPath, "/", FileName]),
+                    ok = filelib:ensure_dir(OutName),
+                    OutName;
+                false ->
+                    {err, directory_not_found}
+            end;
         _ ->
-            ok
-    end,
+            % We also need to extract from deepest to shallowest
+            OrderedToExtract = lists:sort(fun(A, B) ->
+                DepthA = length([X || X <- A, X =:= $/]),
+                DepthB = length([X || X <- B, X =:= $/]),
+                DepthA < DepthB
+            end, ToExtract),
 
-    % Close our erlpkg
-    pkg_close(Self).
+            % Extract the files
+            Self = pkg_open(),
+            lists:foreach(fun(File) ->
+                {ok, {DataName, DataBinary}} = zip:zip_get(File, Self),
+                OutName = lists:flatten([ExtractPath, "/", DataName]),
+                ok = filelib:ensure_dir(OutName),
+                file:write_file(OutName, DataBinary)
+            end, OrderedToExtract),
+            pkg_close(Self),
+
+            % Return requested dir name
+            lists:flatten([ExtractPath, "/", FileName])
+    end.
 -else.
-pkg_extract_zip(_, _) ->
-    ok.
+    pkg_extract_dir(FileName, ExtractPath) ->
+        lists:flatten([ExtractPath, "/", FileName]).
 -endif.
 
 %% Returns path to temp dir for this erlpkg, also ensures tmp dir exists

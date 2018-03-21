@@ -373,7 +373,6 @@ boilerplate() ->
     io:format("==> Creating makefile~n"),
     pkgutils:pkg_extract_file("makefile", ProjectName),
     io:format("    ok.~n"),
-
     io:format("Project '~s' successfully built in ./~s/~n~n", [ProjectName, ProjectName]).
 
 -spec get_input(string()) -> string().
