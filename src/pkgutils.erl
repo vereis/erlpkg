@@ -271,10 +271,10 @@ pkg_ls(Normalise) ->
     % Assuming a given zip archive contains directory a which contains directory b,
     % the resultant filelist will show [a/, a/b/], which is incorrect. We need to remove
     % a/b/ from the list
-    NormalisedFiles = case Normalise of 
-        true -> [F || F <- Files, (length([X || X <- F, X =:= $/]) =:= 0)  or 
-                                  ((length([X || X <- F, X =:= $/]) =:= 1) and (hd(lists:reverse(F)) =:= $/))]; 
-        _    -> Files 
+    NormalisedFiles = case Normalise of
+        true -> [F || F <- Files, (length([X || X <- F, X =:= $/]) =:= 0)  or
+                                  ((length([X || X <- F, X =:= $/]) =:= 1) and (hd(lists:reverse(F)) =:= $/))];
+        _    -> Files
     end,
 
     % Close open archive
