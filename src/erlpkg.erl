@@ -327,6 +327,8 @@ string:join([
 %% hello_world application.
 -spec boilerplate() -> no_return().
 boilerplate() ->
+    io:format("~p~n", [pkgutils:pkg_ls()]),
+
     % Make directory to contain everything
     ProjectName = get_input("==> Name of Project? (Used for directory containing project)\n    "),
     file:make_dir(ProjectName),

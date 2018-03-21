@@ -176,7 +176,7 @@ pkg_extract_dir(FileName, ExtractPath) ->
     ok = filelib:ensure_dir(ExtractPath),
 
     % We need a regex to match files to simulate globbing on files
-    Files = pkg_ls(),
+    Files = pkg_ls(false),
     {ok, Re} = re:compile("^" ++ FileName ++ "/?.*[^/]$"),
     ToExtract = [File || File <- Files, re:run(File, Re) =/= nomatch],
 
@@ -254,8 +254,12 @@ pkg_clean_tmp_dir() ->
 %% When run when not included in an erlpkg, we list files in the current directory relative to
 %% to this module.
 -spec pkg_ls() -> [file:filename_all() | file:name_all()].
--ifdef(ERLPKG).
 pkg_ls() ->
+    pkg_ls(true).
+
+-spec pkg_ls(any()) -> [file:filename_all() | file:name_all()].
+-ifdef(ERLPKG).
+pkg_ls(Normalise) ->
     % Read our own data and extract the archive, open it
     Self = pkg_open(),
     {ok, SelfData} = zip:zip_list_dir(Self),
@@ -264,12 +268,24 @@ pkg_ls() ->
     GetFileName = fun({_, File, _, _, _, _}) -> File end,
     Files = [GetFileName(F) || F <- SelfData, size(F) > 2],
 
+    % Assuming a given zip archive contains directory a which contains directory b,
+    % the resultant filelist will show [a/, a/b/], which is incorrect. We need to remove
+    % a/b/ from the list
+    NormalisedFiles = case Normalise of 
+        true -> [F || F <- Files, (length([X || X <- F, X =:= $/]) =:= 0)  or 
+                                  ((length([X || X <- F, X =:= $/]) =:= 1) and (hd(lists:reverse(F)) =:= $/))]; 
+        _    -> Files 
+    end,
+
     % Close open archive
     pkg_close(Self),
-    lists:sort(Files).
+    lists:sort(NormalisedFiles).
 -else.
-pkg_ls() ->
-    Files = filelib:wildcard(lists:flatten([pkg_dir_path(), "/*"])),
+pkg_ls(Normalise) ->
+    Files = case Normalise of
+        true -> filelib:wildcard(lists:flatten([pkg_dir_path(), "/**"]));
+        _    -> filelib:wildcard(lists:flatten([pkg_dir_path(), "/*"]))
+    end,
     lists:sort(Files).
 -endif.
 
