@@ -3,7 +3,7 @@
 -module(erlpkg).
 -author([{"Vereis", "Chris Bailey"}]).
 
--define(VERSION, "4.1.0").
+-define(VERSION, "4.2.0").
 
 -vsn(?VERSION).
 
@@ -19,24 +19,48 @@
 -endif.
 
 -define(DEFAULT_ARGS, [
-    {["-e", "--entrypoint"], o_entry, singleton, default, "Sets the entry point for the erlpkg which is the " ++
-                                                          "module we start the erlpkg from. The default value for " ++
-                                                          "this is the first module argument provided."},
+    {["-e", "--entrypoint"],
+     o_entry,
+     singleton,
+     default,
+     "Sets the entry point for the erlpkg which is the " ++
+     "module we start the erlpkg from. The default value for " ++
+     "this is the first module argument provided."},
 
-    {["-o", "--output"], o_output, singleton, default, "Sets the output name for the erlpkg. The default " ++
-                                                       "value for this is the first module argument provided " ++
-                                                       "with the extension '.erlpkg'"},
+    {["-o", "--output"],
+     o_output,
+     singleton,
+     default,
+     "Sets the output name for the erlpkg. The default " ++
+     "value for this is the first module argument provided " ++
+     "with the extension '.erlpkg'"},
 
-    {["-h", "--help"], o_help, is_set, false, "Displays this help message and exits."},
+    {["-h", "--help"],
+     o_help,
+     is_set,
+     false,
+     "Displays this help message and exits."},
 
-    {["-v", "--version"], o_vsn, is_set, false, "Displays current build version."},
+    {["-v", "--version"],
+     o_vsn,
+     is_set,
+     false,
+     "Displays current build version."},
 
-    {["--no-utils"], o_no_pkg_utils, is_set, false, "Disable automatic inclusion of erlpkg pkg* modules to " ++
-                                                    "packages built by erlpkg. If unset, all packages built " ++
-                                                    "by erlpkg will include pkgargs and pkgutil modules for " ++
-                                                    "convenience."},
+    {["--no-utils"],
+     o_no_pkg_utils,
+     is_set,
+     false,
+     "Disable automatic inclusion of erlpkg pkg* modules to " ++
+     "packages built by erlpkg. If unset, all packages built " ++
+     "by erlpkg will include pkgargs and pkgutil modules for " ++
+     "convenience."},
 
-    {["--gen-boilerplate"], o_boilerplate, is_set, false, "Bootstraps a new Erlang and Erlpkg project."}
+    {["--gen-boilerplate"],
+     o_boilerplate,
+     is_set,
+     false,
+     "Bootstraps a new Erlang and Erlpkg project."}
 ]).
 
 -define(COND(Cond, A, B), [
@@ -376,7 +400,7 @@ usage() ->
 help() ->
     io:format("Configuration Parameters:~n" ++
               "~s~n",
-              [pkgargs:create_help_string(?DEFAULT_ARGS, 1, 55)]).
+              [pkgargs:create_help_string(2, 55)]).
 
 %% Displays version information
 -spec version() -> no_return().

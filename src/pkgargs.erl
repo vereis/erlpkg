@@ -2,7 +2,7 @@
 %%% Parses escript package arguments
 -module(pkgargs).
 -author([{"Vereis", "Chris Bailey"}]).
--define(VERSION, "3.0.0").
+-define(VERSION, "3.1.0").
 
 -vsn(?VERSION).
 
@@ -14,6 +14,7 @@
         get/1,
         get/2,
         parse/2,
+        create_help_string/2,
         create_help_string/3,
 
         get_option/2,
@@ -30,7 +31,9 @@
 %% Any arguments not matching a specified option_definition are returned as
 %% a list keyed by the value of this macro.
 -define(DEFAULT_ARG_ID, default).
--define(DESC_INDENT_AMOUNT, 16).
+
+%% Minimum size for the flag field of help description text
+-define(MIN_FLAG_COL_SIZE, 16).
 
 
 
@@ -40,7 +43,7 @@
 %%% - TYPE DEFINITIONS --------------------------------------------------------------------------%%%
 %%% ---------------------------------------------------------------------------------------------%%%
 
--type arg_name() :: [list()].
+-type arg_name() :: [string()].
 -type arg_id() :: atom().
 -type arg_type() :: is_set | singleton | many | integer().
 -type arg_default() :: any().
@@ -118,7 +121,7 @@ parse(Args, OpDefs) ->
     ParsedArgs  = maps:to_list(parse_args(Args, DefaultArgs, OpMap, OpDefs)),
 
     %% Spawn an agent for querying ParsedArgs
-    register(?Q, spawn(fun() -> query_processor(ParsedArgs) end)),
+    register(?Q, spawn(fun() -> query_processor(OpDefs, ParsedArgs) end)),
 
     %% Return ParsedArgs anyway, in case user wants to manually traverse it
     ParsedArgs.
@@ -248,15 +251,34 @@ parse_args(Args, ArgsBuffer, OpMap, OpDef, {PrevTokId, N}) when is_integer(N)->
 %%% ---------------------------------------------------------------------------------------------%%%
 
 %% A process which responds to queries about whether or not args were set.
--spec query_processor(parsed_args_list()) -> any().
-query_processor(ParsedArgs) ->
+-spec query_processor(arg_defs(), parsed_args_list()) -> no_return().
+query_processor(OpDefs, ParsedArgs) ->
     receive
         {Sender, Arg} when is_atom(Arg) ; is_list(Arg) ->
-            Sender ! {?Q, Arg, get(Arg, ParsedArgs)};
+            case Arg of
+                opdef -> Sender ! {?Q, opdef, OpDefs};
+                _     -> Sender ! {?Q, Arg, get(Arg, ParsedArgs)}
+            end;
         stop ->
+            exit(self(), ok);
+        _    ->
             ok
     end,
-    query_processor(ParsedArgs).
+    query_processor(OpDefs, ParsedArgs).
+
+-spec get_arg_defs() -> arg_defs().
+get_arg_defs() ->
+    case lists:member(?Q, registered()) of
+        false ->
+            {err, parse_agent_not_found};
+        _    ->
+            ?Q ! {self(), opdef},
+            receive
+                {?Q, opdef, Value} ->
+                    Value
+            end,
+            Value
+    end.
 
 %% Returns a map which maps option_names to option_ids for easy lookup.
 %% Note:
@@ -321,75 +343,28 @@ get_option_desc(OpId, OpDefs) ->
     {_, _, _, _, OpDesc} = get_option(OpId, OpDefs),
     OpDesc.
 
+-spec create_help_string(non_neg_integer(), pos_integer()) -> [string()].
+create_help_string(ColumnPadding, DescLenBound) ->
+    create_help_string(get_arg_defs(), ColumnPadding, DescLenBound).
 
-
-
-
-%%% ---------------------------------------------------------------------------------------------%%%
-%%% - W.I.P FUNCTIONS ---------------------------------------------------------------------------%%%
-%%% ---------------------------------------------------------------------------------------------%%%
-
-%% Generates a UNIX style help string like you might find on grep or ls
-%% Option definitions should look like:
-%% [
-%%     {[A, ...] = OpNames, OpId, OpType, OpDef, Description}
-%%     ...
-%% ]
 -spec create_help_string(arg_defs(), non_neg_integer(), pos_integer()) -> [string()].
-create_help_string(OpDefs, LPad, MaxDescLen) ->
-    % Firstly, generate the name_strings which tell the user what commands are available
-    NameStrs = lists:sort(
-        lists:map(fun({OpNames, _, _, _, Desc}) ->
-            case length(OpNames) > 1 of
-                true ->
-                    [Name | OtherNames] = OpNames,
-                    NameStr = [
-                        Name,
-                        [io_lib:format(", ~s", [OtherName]) || OtherName <- OtherNames]
-                    ];
-                false ->
-                    NameStr = OpNames
-            end,
-            {lists:flatten(NameStr), Desc}
-        end, OpDefs)
-    ),
+create_help_string(OpDefs, ColumnPadding, DescLenBound) ->
+    Options = lists:sort([{string:join(Flags, ", "), parabreak(Desc, DescLenBound)} ||
+                          {Flags, _, _, _, Desc} <- OpDefs]),
+    FlagColumnWidth = lists:max([length(Fs) || {Fs, _} <- Options] ++ [?MIN_FLAG_COL_SIZE]),
 
-    % The description of each command will begin in a certain column which is at minimum
-    % the 16th column and at most 2 columns larger than the longest command
-    DescBeginCol = lists:max([16, lists:max([length(S) || {S, _} <- NameStrs]) + 2]),
-    LPadStr = [" " || _ <- lists:seq(1, LPad)],
+    lists:map(fun({FlagString, DescStrings}) ->
+        FlagStringLen = length(FlagString),
+        PaddingNeeded = FlagColumnWidth - FlagStringLen + ColumnPadding,
 
-    lists:map(fun({NameStr, Desc}) ->
-        % We need this to correctly space the first line of the desc from the name_string
-        NameColEnds = length(NameStr),
-        NameDescSpace = DescBeginCol - NameColEnds,
+        FirstFormatString = lists:flatten(["~s", $~, integer_to_list(PaddingNeeded), "c~s"]),
+        FirstLine = io_lib:format(FirstFormatString, [FlagString, $ , hd(DescStrings)]),
 
-        % but we also need this to break the desc into multiple lines if need be.
-        DescStrs = parabreak(Desc, MaxDescLen),
-        case length(DescStrs) > 1 of
-            true ->
-                SpaceDescBegins = [" " || _ <- lists:seq(1, DescBeginCol + LPad)],
-                [FirstDescStr | OtherDescStrs] = DescStrs,
-                ProcessedDescStr = [
-                    [" " || _ <- lists:seq(1, NameDescSpace)],
-                    FirstDescStr,
-                    [
-                        [[SpaceDescBegins, NthDescStr] || NthDescStr <- OtherDescStrs]
-                    ]
-                ];
-            false ->
-                ProcessedDescStr = [
-                    [" " || _ <- lists:seq(1, NameDescSpace)],
-                    DescStrs
-                ]
-        end,
+        OtherFormatString = lists:flatten([$~, integer_to_list(FlagColumnWidth + ColumnPadding), "c~s"]),
+        OtherLines = [io_lib:format(OtherFormatString, [$ , Str]) || Str <- tl(DescStrings)],
 
-        lists:flatten([
-            LPadStr,
-            NameStr,
-            ProcessedDescStr
-        ])
-    end, NameStrs).
+        lists:flatten([FirstLine, OtherLines])
+    end, Options).
 
 %% Naively build a paragraph of lines Line_length long, seperated by new lines
 -spec parabreak(binary() | string(), pos_integer()) -> [string()].
