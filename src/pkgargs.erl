@@ -26,7 +26,7 @@
 -endif.
 
 %% Process name for our parsed_arg process
--define(Q, parsed_arg_agent__).
+-define(Q, pkgargs_arg_server).
 
 %% Any arguments not matching a specified option_definition are returned as
 %% a list keyed by the value of this macro.
@@ -121,7 +121,7 @@ parse(Args, OpDefs) ->
     ParsedArgs  = maps:to_list(parse_args(Args, DefaultArgs, OpMap, OpDefs)),
 
     %% Spawn an agent for querying ParsedArgs
-    register(?Q, spawn(fun() -> query_processor(OpDefs, ParsedArgs) end)),
+    register(?Q, spawn(fun() -> arg_server(OpDefs, ParsedArgs) end)),
 
     %% Return ParsedArgs anyway, in case user wants to manually traverse it
     ParsedArgs.
@@ -251,8 +251,8 @@ parse_args(Args, ArgsBuffer, OpMap, OpDef, {PrevTokId, N}) when is_integer(N)->
 %%% ---------------------------------------------------------------------------------------------%%%
 
 %% A process which responds to queries about whether or not args were set.
--spec query_processor(arg_defs(), parsed_args_list()) -> no_return().
-query_processor(OpDefs, ParsedArgs) ->
+-spec arg_server(arg_defs(), parsed_args_list()) -> no_return().
+arg_server(OpDefs, ParsedArgs) ->
     receive
         {Sender, Arg} when is_atom(Arg) ; is_list(Arg) ->
             case Arg of
@@ -264,7 +264,7 @@ query_processor(OpDefs, ParsedArgs) ->
         _    ->
             ok
     end,
-    query_processor(OpDefs, ParsedArgs).
+    arg_server(OpDefs, ParsedArgs).
 
 -spec get_arg_defs() -> arg_defs().
 get_arg_defs() ->
@@ -349,8 +349,9 @@ create_help_string(ColumnPadding, DescLenBound) ->
 
 -spec create_help_string(arg_defs(), non_neg_integer(), pos_integer()) -> [string()].
 create_help_string(OpDefs, ColumnPadding, DescLenBound) ->
-    Options = lists:sort([{string:join(Flags, ", "), parabreak(Desc, DescLenBound)} ||
+    Options = lists:sort([{string:join(Flags, ", "), libutils:linebreak(Desc, DescLenBound)} ||
                           {Flags, _, _, _, Desc} <- OpDefs]),
+
     FlagColumnWidth = lists:max([length(Fs) || {Fs, _} <- Options] ++ [?MIN_FLAG_COL_SIZE]),
 
     lists:map(fun({FlagString, DescStrings}) ->
@@ -365,22 +366,6 @@ create_help_string(OpDefs, ColumnPadding, DescLenBound) ->
 
         lists:flatten([FirstLine, OtherLines])
     end, Options).
-
-%% Naively build a paragraph of lines Line_length long, seperated by new lines
--spec parabreak(binary() | string(), pos_integer()) -> [string()].
-parabreak(String, MaxLen) when is_binary(String) ->
-    parabreak(binary_to_list(String), MaxLen);
-parabreak(String, MaxLen) when is_list(String) ->
-    [W | Ws] = string:tokens(String, " "),
-    [lists:flatten([Line, "\n"]) || Line <- parabreak(Ws, MaxLen, [W], [])].
-
--spec parabreak(string(), pos_integer(), iolist(), [iolist()]) -> iolist().
-parabreak([], _, L, Ls) ->
-    Ls ++ [L];
-parabreak([W | Ws], MaxLen, L, Ls) when length(L) + length(W) >= MaxLen ->
-    parabreak(Ws, MaxLen, [W], Ls ++ [L]);
-parabreak([W | Ws], MaxLen, L, Ls) ->
-    parabreak(Ws, MaxLen, lists:flatten(L ++ [" ", W]), Ls).
 
 
 

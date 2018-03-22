@@ -105,15 +105,15 @@ main(Args) ->
     % Get Parsed args
     [ShowHelp, ShowVsn, AttachPkgs, Boilerplate] = pkgargs:get([o_help, o_vsn, o_no_pkg_utils, o_boilerplate]),
 
-    Files = perform_wildcard_matches(pkgargs:get(default)),
+    Files = libutils:wildcard(pkgargs:get(default)),
 
     Entrypoint = ?COND(pkgargs:get(o_entry) =:= default,
                        default_entrypoint(Files),
                        pkgargs:get(o_entry)),
 
-    PkgName = ?COND(pkgargs:get(o_output) =:= default,
-                    default_pkg_name(Files),
-                    pkgargs:get(o_output)),
+    PkgName    = ?COND(pkgargs:get(o_output) =:= default,
+                       default_pkg_name(Files),
+                       pkgargs:get(o_output)),
 
     try branch(Files, Entrypoint, PkgName, ShowHelp, ShowVsn, AttachPkgs, Boilerplate) of
         _ -> ok
@@ -126,7 +126,7 @@ main(Args) ->
         throw:vsn ->
             version();
         throw:boilerplate ->
-            boilerplate();
+            boilerplate:generate();
         throw:{bad_filename, File} ->
             io:format("~s: Error - ~s is not a valid filename or could not be found.~nAborting build.~n~n",
                       [pkgutils:pkg_name(), File]);
@@ -299,88 +299,6 @@ build_file(_, Filename) ->
 
 
 %%% ---------------------------------------------------------------------------------------------%%%
-%%% - BOILERPLATE GEN ---------------------------------------------------------------------------%%%
-%%% ---------------------------------------------------------------------------------------------%%%
-%% Gitignore content macro
--define(GITIGNORE,
-string:join([
-"### ERLANG STUFF ###",
-".eunit",
-"deps",
-"*.o",
-"*.beam",
-"*.plt",
-"erl_crash.dump",
-".concrete/DEV_MODE",
-".rebar",
-".log",
-"### END OF ERLANG STUFF ###",
-"### ERLPKG STUFF ###",
-"ebin/*",
-"edebug/*",
-"etesting/*",
-"### END OF ERLPKG STUFF ###"],
-"\n")
-).
-
-%% Creates a directory containing optional git information, including erlpkg and creating a simple
-%% hello_world application.
--spec boilerplate() -> no_return().
-boilerplate() ->
-    % Make directory to contain everything
-    ProjectName = get_input("==> Name of Project? (Used for directory containing project)\n    "),
-    file:make_dir(ProjectName),
-    io:format("    ok.~n"),
-
-    % Check if user is using git, and if so do a git init
-    case get_input("==> Initialise with Git? (y/n)\n    ") of
-        "y"  -> io:format("    ok.~n"),
-                io:format("==> Setting up .git in ./~s/~n    ok.~n", [ProjectName]),
-                os:cmd(lists:flatten(["git init ", ProjectName])),
-                io:format("==> Creating .gitignore in ./~s/~n    ok.~n", [ProjectName]),
-                file:write_file(lists:flatten([ProjectName, "/.gitignore"]), ?GITIGNORE);
-        _    -> io:format("    ok.~n")
-    end,
-
-    % Make standard directories
-    io:format("==> Creating standard directories~n"),
-    Srcdir = ProjectName ++ "/src",
-    Utildir = ProjectName ++ "/util",
-    file:make_dir(Srcdir),
-    file:make_dir(Utildir),
-    io:format("    ok.~n"),
-
-    % Extract 'Hello world' example to newly created project src dir
-    io:format("==> Writing example module and eunit test in ./~s/~s/~n", [ProjectName, "src"]),
-    pkgutils:pkg_extract_file("hello.src", Srcdir),
-    pkgutils:pkg_extract_file("hello_tests.src", Srcdir),
-    file:rename(lists:flatten(Srcdir, "/hello.src"), Srcdir ++ "/hello.erl"),
-    file:rename(lists:flatten(Srcdir, "/hello_tests.src"), Srcdir ++ "/hello_tests.erl"),
-    io:format("    ok.~n"),
-
-    % Extract Elvis and Elvis.config to newly created project util dir
-    io:format("==> Configuring 'Elvis' (Linter)~n"),
-    pkgutils:pkg_extract_file("elvis", Utildir),
-    pkgutils:pkg_extract_file("elvis.config", Utildir),
-    io:format("    ok.~n"),
-
-    % Copy a copy of erlpkg into utildir
-    io:format("==> Configuring 'Erlpkg'~n"),
-    file:copy(pkgutils:pkg_abs_path(), Utildir ++ "/" ++ pkgutils:pkg_name()),
-    io:format("    ok.~n"),
-
-    % Extract makefile
-    io:format("==> Creating makefile~n"),
-    pkgutils:pkg_extract_file("makefile", ProjectName),
-    io:format("    ok.~n"),
-    io:format("Project '~s' successfully built in ./~s/~n~n", [ProjectName, ProjectName]).
-
--spec get_input(string()) -> string().
-get_input(Prompt) ->
-    [Char || Char <- io:get_line(Prompt), Char =/= $\n].
-
-
-%%% ---------------------------------------------------------------------------------------------%%%
 %%% - MISC FUNCTIONS ----------------------------------------------------------------------------%%%
 %%% ---------------------------------------------------------------------------------------------%%%
 
@@ -430,21 +348,8 @@ default_entrypoint([FirstFile | _]) when is_list(FirstFile) ->
 default_entrypoint([]) ->
     default.
 
-%% Looks through a list of file names and expands any wildcards that may exist.
-%% None wildcards will just be added to the accumulator so that we can crash gracefully
-%% later on.
--spec perform_wildcard_matches([file:filename_all()]) -> [file:filename_all()].
-perform_wildcard_matches([]) ->
-    [];
-perform_wildcard_matches(FileList) ->
-    lists:foldl(fun(PotentialWildcard, Accumulator) ->
-        case filelib:wildcard(PotentialWildcard) of
-            [] ->
-                Accumulator ++ [PotentialWildcard];
-            Matches ->
-                Accumulator ++ Matches
-        end
-    end, [], FileList).
+
+
 
 
 %%% ---------------------------------------------------------------------------------------------%%%

@@ -136,7 +136,7 @@ define package
 	@ cp $(SRCDIR)/*.erl $(OUTPUT_DIR)/
 	@ cp $(UTILDIR)/elvis $(OUTPUT_DIR)/
 	@ cp $(SRCDIR)/boilerplate/* $(OUTPUT_DIR)/
-	@ cd $(OUTPUT_DIR) && ($(ERL) -pa $(OUTPUT_DIR) -noinput -noshell -s erlpkg main erlpkg.erl pkgargs.erl pkgutils.erl hello.src hello_tests.src elvis elvis.config makefile) && cd ..
+	@ cd $(OUTPUT_DIR) && ($(ERL) -pa $(OUTPUT_DIR) -noinput -noshell -s erlpkg main erlpkg.erl pkgargs.erl pkgutils.erl libutils.erl boilerplate.erl hello.src hello_tests.src elvis elvis.config makefile) && cd ..
 	@ mv $(OUTPUT_DIR)/erlpkg.erlpkg $(OUTPUT_DIR)/erlpkg
 	@ chmod +x $(OUTPUT_DIR)/erlpkg
 	@ echo "$(NORMAL)    Done"
@@ -176,6 +176,9 @@ define eunit
 
 	@ echo "  Running tests for module: pkgutils"
 	@ cd $(TARGET_DIR) && $(ERL) -pa $(TARGET_DIR) -noinput -noshell -s pkgutils eunit
+
+	@ echo "  Running tests for module: libutils"
+	@ cd $(TARGET_DIR) && $(ERL) -pa $(TARGET_DIR) -noinput -noshell -s libutils eunit
 
 	@ echo "$(COLOR)==> EUnit Tests complete in './$(TARGET_DIR)/'$(NORMAL)"
 	@ echo "    Done\n"
