@@ -48,14 +48,14 @@ nonstrict:
 	@ echo "$(GREEN)==> Building RELEASE NONSTRICT$(NORMAL)"
 	@ echo "    Compiling with debug options enabled."
 	@ echo "    Debug macro enabled."
-	$(call compile, $(ERLFLAGS), $(OUTDIR), $(GREEN), $(STDOUT))
+	$(call compile, $(ERLFLAGS_NONSTRICT), $(OUTDIR), $(GREEN), $(STDOUT))
 	$(call package, $(OUTDIR), $(GREEN))
 
 debug:
 	@ echo "$(BLUE)==> Building DEBUG$(NORMAL)"
 	@ echo "    Compiling with debug options enabled."
 	@ echo "    Debug macro enabled."
-	$(call compile, $(ERLFLAGS), $(DEBUGDIR), $(BLUE), $(STDOUT))
+	$(call compile, $(ERLFLAGS_DEBUG), $(DEBUGDIR), $(BLUE), $(STDOUT))
 	$(call package, $(DEBUGDIR), $(BLUE))
 
 .PHONY: test
